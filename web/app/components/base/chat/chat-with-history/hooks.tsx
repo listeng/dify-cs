@@ -277,6 +277,8 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
     handleNewConversationInputsChange(conversationInputs)
   }, [handleNewConversationInputsChange, inputsForms])
 
+
+
   const { data: newConversation } = useSWR(newConversationId ? [isInstalledApp, appId, newConversationId] : null, () => generationConversationName(isInstalledApp, appId, newConversationId), { revalidateOnFocus: false })
   const [originConversationList, setOriginConversationList] = useState<ConversationItem[]>([])
   useEffect(() => {
@@ -377,6 +379,24 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
       callback?.()
     }
   }, [setShowNewConversationItemInList, checkInputsRequired])
+
+  // 自动开始对话：当hideparams=1时，在输入参数设置完成后自动开始对话
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search)
+      if (searchParams.get('hideparams') === '1' && inputsForms.length > 0 && !currentConversationId) {
+        // 延迟执行以确保所有参数都已设置完成
+        const timer = setTimeout(() => {
+          handleStartChat(() => {
+            // 对话开始后的回调，这里可以添加额外的逻辑
+          })
+        }, 500)
+        
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [inputsForms.length, currentConversationId, handleStartChat])
+
   const currentChatInstanceRef = useRef<{ handleStop: () => void }>({ handleStop: noop })
   const handleChangeConversation = useCallback((conversationId: string) => {
     currentChatInstanceRef.current.handleStop()

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import {
   RiBookmark3Line,
   RiErrorWarningFill,
+  RiPlayLargeLine,
 } from '@remixicon/react'
 import { useBoolean } from 'ahooks'
 import { useSearchParams } from 'next/navigation'
@@ -24,6 +25,7 @@ import type {
 } from '@/models/debug'
 import AppIcon from '@/app/components/base/app-icon'
 import Badge from '@/app/components/base/badge'
+import Button from '@/app/components/base/button'
 import { changeLanguage } from '@/i18n-config/i18next-config'
 import Loading from '@/app/components/base/loading'
 import { userInputsFormToPromptVariables } from '@/utils/model-config'
@@ -79,7 +81,9 @@ const TextGeneration: FC<IMainProps> = ({
 
   const searchParams = useSearchParams()
   const mode = searchParams.get('mode') || 'create'
-  const [currentTab, setCurrentTab] = useState<string>(['create', 'batch'].includes(mode) ? mode : 'create')
+  const canBatch = searchParams.get('canbatch') !== '0' // 当canbatch=0时禁用批量运行
+  const autoRun = searchParams.get('autorun') === '1' // 当autorun=1时自动运行
+  const [currentTab, setCurrentTab] = useState<string>(['create', 'batch'].includes(mode) && canBatch ? mode : 'create')
 
   // Notice this situation isCallBatchAPI but not in batch tab
   const [isCallBatchAPI, setIsCallBatchAPI] = useState(false)
@@ -126,7 +130,16 @@ const TextGeneration: FC<IMainProps> = ({
   })
   const [completionFiles, setCompletionFiles] = useState<VisionFile[]>([])
 
+  const hasAutoRunExecuted = useRef<boolean>(false)
+  const isRunning = useRef<boolean>(false)
+
   const handleSend = () => {
+    if (isRunning.current) {
+      notify({ type: 'info', message: t('share.generation.errorMsg.alreadyRunning') })
+      return
+    }
+
+    isRunning.current = true
     setIsCallBatchAPI(false)
     setControlSend(Date.now())
 
@@ -357,13 +370,25 @@ const TextGeneration: FC<IMainProps> = ({
         [`${taskId}`]: completionRes,
       })
     }
+
+    // 任务完成后重置 isRunning
+    // 对于单次运行（taskId为undefined），直接重置isRunning状态
+    if (!taskId) {
+      isRunning.current = false
+    }
+    // 对于批量运行，检查所有任务是否完成
+    else if (!needToAddNextGroupTask && newAllTaskList.every(task => [TaskStatus.completed, TaskStatus.failed].includes(task.status))) {
+      isRunning.current = false
+    }
   }
 
   const appData = useWebAppStore(s => s.appInfo)
   const appParams = useWebAppStore(s => s.appParams)
   const accessMode = useWebAppStore(s => s.webAppAccessMode)
   useEffect(() => {
-    (async () => {
+    isRunning.current = false
+
+    ;(async () => {
       if (!appData || !appParams)
         return
       !isWorkflow && fetchSavedMessage()
@@ -389,8 +414,29 @@ const TextGeneration: FC<IMainProps> = ({
       } as PromptConfig)
       setMoreLikeThisConfig(more_like_this)
       setTextToSpeechConfig(text_to_speech)
+
+      // 自动运行功能：当autorun=1且为workflow时，使用URL参数作为输入并自动运行
+      if (autoRun && isWorkflow && prompt_variables.length > 0 && !hasAutoRunExecuted.current) {
+        const urlInputs: Record<string, any> = {}
+        prompt_variables.forEach((variable) => {
+          const paramValue = searchParams.get(variable.key)
+          if (paramValue !== null) {
+            urlInputs[variable.key] = paramValue
+          }
+        })
+        
+        // 如果有匹配的参数，设置输入并触发运行
+        if (Object.keys(urlInputs).length > 0) {
+          hasAutoRunExecuted.current = true // 标记已执行自动运行，防止重复执行
+          setInputs(urlInputs)
+          // 延迟执行以确保组件完全初始化
+          setTimeout(() => {
+            handleSend()
+          }, 100)
+        }
+      }
     })()
-  }, [appData, appParams, fetchSavedMessage, isWorkflow])
+  }, [appData, appParams, fetchSavedMessage, isWorkflow, autoRun, searchParams, setInputs, handleSend])
 
   // Can Use metadata(https://beta.nextjs.org/docs/api-reference/metadata) to set title. But it only works in server side client.
   useDocumentTitle(siteInfo?.title || t('share.generation.title'))
@@ -454,6 +500,23 @@ const TextGeneration: FC<IMainProps> = ({
           : 'bg-chatbot-bg',
       )}
     >
+      {/* AutoRun模式下的运行按钮 */}
+      {autoRun && (
+        <div className={cn(
+          'flex shrink-0 items-center justify-center border-b border-divider-subtle bg-components-panel-bg px-14 py-4',
+          !isPC && 'px-4 py-3',
+        )}>
+          <Button
+            onClick={handleSend}
+            variant="primary"
+            disabled={isRunning.current}
+            className="flex items-center gap-2"
+          >
+            <RiPlayLargeLine className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className='text-[13px]'>{t('share.generation.run')}</span>
+          </Button>
+        </div>
+      )}
       {isCallBatchAPI && (
         <div className={cn(
           'flex shrink-0 items-center justify-between px-14 pb-2 pt-9',
@@ -506,11 +569,12 @@ const TextGeneration: FC<IMainProps> = ({
       isInstalledApp ? 'h-full rounded-2xl shadow-md' : 'h-screen',
     )}>
       {/* Left */}
-      <div className={cn(
-        'relative flex h-full shrink-0 flex-col',
-        isPC ? 'w-[600px] max-w-[50%]' : resultExisted ? 'h-[calc(100%_-_64px)]' : '',
-        isInstalledApp && 'rounded-l-2xl',
-      )}>
+      {!autoRun && (
+        <div className={cn(
+          'relative flex h-full shrink-0 flex-col',
+          isPC ? 'w-[600px] max-w-[50%]' : resultExisted ? 'h-[calc(100%_-_64px)]' : '',
+          isInstalledApp && 'rounded-l-2xl',
+        )}>
         {/* header */}
         <div className={cn('shrink-0 space-y-4 border-b border-divider-subtle', isPC ? 'bg-components-panel-bg p-8 pb-0' : 'p-4 pb-0')}>
           <div className='flex items-center gap-3'>
@@ -530,7 +594,7 @@ const TextGeneration: FC<IMainProps> = ({
           <TabHeader
             items={[
               { id: 'create', name: t('share.generation.tabs.create') },
-              { id: 'batch', name: t('share.generation.tabs.batch') },
+              ...(canBatch ? [{ id: 'batch', name: t('share.generation.tabs.batch') }] : []),
               ...(!isWorkflow
                 ? [{
                   id: 'saved',
@@ -603,18 +667,21 @@ const TextGeneration: FC<IMainProps> = ({
             }
           </div>
         )}
-      </div>
+        </div>
+      )}
       {/* Result */}
       <div className={cn(
         isPC
-          ? 'h-full w-0 grow'
-          : isShowResultPanel
-            ? 'fixed inset-0 z-50 bg-background-overlay backdrop-blur-sm'
-            : resultExisted
-              ? 'relative h-16 shrink-0 overflow-hidden bg-background-default-burn pt-2.5'
-              : '',
+          ? autoRun ? 'h-full w-full' : 'h-full w-0 grow'
+          : autoRun
+            ? 'h-full w-full'
+            : isShowResultPanel
+              ? 'fixed inset-0 z-50 bg-background-overlay backdrop-blur-sm'
+              : resultExisted
+                ? 'relative h-16 shrink-0 overflow-hidden bg-background-default-burn pt-2.5'
+                : '',
       )}>
-        {!isPC && (
+        {!isPC && !autoRun && (
           <div
             className={cn(
               isShowResultPanel

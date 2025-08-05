@@ -2,6 +2,7 @@
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getSigninPath } from '@/utils/route-utils'
 import cn from 'classnames'
 import { RiCheckboxCircleFill } from '@remixicon/react'
 import { useCountDown } from 'ahooks'
@@ -31,7 +32,8 @@ const ChangePasswordForm = () => {
   }, [])
 
   const getSignInUrl = () => {
-    return `/webapp-signin?redirect_url=${searchParams.get('redirect_url') || ''}`
+    const redirectUrl = searchParams.get('redirect_url') || ''
+    return getSigninPath(redirectUrl)
   }
 
   const AUTO_REDIRECT_TIME = 5000

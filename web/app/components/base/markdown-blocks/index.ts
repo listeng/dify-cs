@@ -3,6 +3,7 @@
  * This allows for cleaner imports in other parts of the application.
  */
 
+export { default as ActionBlock } from './action-block'
 export { default as AudioBlock } from './audio-block'
 export { default as CodeBlock } from './code-block'
 export { default as Img } from './img'

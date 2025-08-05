@@ -5,6 +5,7 @@ import { useDebounceFn } from 'ahooks'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { getRoutePath, SIGNIN, APPS, INIT } from '@/utils/route-utils'
 
 import type { SubmitHandler } from 'react-hook-form'
 import { useForm } from 'react-hook-form'
@@ -83,12 +84,12 @@ const InstallForm = () => {
     fetchSetupStatus().then((res: SetupStatusResponse) => {
       if (res.step === 'finished') {
         localStorage.setItem('setup_status', 'finished')
-        router.push('/signin')
+        router.push(getRoutePath(SIGNIN))
       }
       else {
         fetchInitValidateStatus().then((res: InitValidateStatusResponse) => {
           if (res.status === 'not_started')
-            router.push('/init')
+            router.push(getRoutePath(INIT))
         })
       }
       setLoading(false)

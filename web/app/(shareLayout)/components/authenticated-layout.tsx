@@ -7,6 +7,7 @@ import { useWebAppStore } from '@/context/web-app-context'
 import { useGetUserCanAccessApp } from '@/service/access-control'
 import { useGetWebAppInfo, useGetWebAppMeta, useGetWebAppParams } from '@/service/use-share'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { getSigninPath } from '../../../src/utils/route-utils'
 import React, { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -35,10 +36,9 @@ const AuthenticatedLayout = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const getSigninUrl = useCallback(() => {
-    const params = new URLSearchParams(searchParams)
+    const params = new URLSearchParams(searchParams.toString())
     params.delete('message')
-    params.set('redirect_url', pathname)
-    return `/webapp-signin?${params.toString()}`
+    return getSigninPath(pathname, params.get('message') || undefined)
   }, [searchParams, pathname])
 
   const backToHome = useCallback(() => {

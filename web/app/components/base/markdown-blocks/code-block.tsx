@@ -13,6 +13,7 @@ import { Theme } from '@/types/app'
 import useTheme from '@/hooks/use-theme'
 import SVGRenderer from '../svg-gallery' // Assumes svg-gallery.tsx is in /base directory
 import MarkdownMusic from '@/app/components/base/markdown-blocks/music'
+import ActionBlock from '@/app/components/base/markdown-blocks/action-block'
 import ErrorBoundary from '@/app/components/base/markdown/error-boundary'
 
 // Available language https://github.com/react-syntax-highlighter/react-syntax-highlighter/blob/master/AVAILABLE_LANGUAGES_HLJS.MD
@@ -38,6 +39,7 @@ const capitalizationLanguageNameMap: Record<string, string> = {
   latex: 'Latex',
   svg: 'SVG',
   abc: 'ABC',
+  action: 'Action',
 }
 const getCorrectCapitalizationLanguageName = (language: string) => {
   if (!language)
@@ -395,6 +397,12 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
         return (
           <ErrorBoundary>
             <MarkdownMusic children={content} />
+          </ErrorBoundary>
+        )
+      case 'action':
+        return (
+          <ErrorBoundary>
+            <ActionBlock content={content} />
           </ErrorBoundary>
         )
       default:

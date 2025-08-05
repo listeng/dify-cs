@@ -108,14 +108,12 @@ function unicodeToChar(text: string) {
   })
 }
 
+import { getSigninPath } from '@/utils/route-utils'
+
 function requiredWebSSOLogin(message?: string, code?: number) {
-  const params = new URLSearchParams()
-  params.append('redirect_url', encodeURIComponent(`${globalThis.location.pathname}${globalThis.location.search}`))
-  if (message)
-    params.append('message', message)
-  if (code)
-    params.append('code', String(code))
-  globalThis.location.href = `${globalThis.location.origin}${basePath}/webapp-signin?${params.toString()}`
+  const redirectUrl = `${globalThis.location.pathname}${globalThis.location.search}`
+  const signinUrl = getSigninPath(redirectUrl, message, code)
+  globalThis.location.href = `${globalThis.location.origin}${signinUrl}`
 }
 
 export function format(text: string) {

@@ -163,7 +163,14 @@ const ChatWrapper = () => {
     return chatList.filter(item => !item.isOpeningStatement)
   }, [chatList, currentConversationId])
 
-  const [collapsed, setCollapsed] = useState(!!currentConversationId)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search)
+      if (searchParams.get('hideparams') === '1')
+        return true
+    }
+    return !!currentConversationId
+  })
 
   const chatNode = useMemo(() => {
     if (allInputsHidden || !inputsForms.length)

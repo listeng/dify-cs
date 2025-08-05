@@ -10,6 +10,7 @@ import NormalForm from './normalForm'
 import { AccessMode } from '@/models/access-control'
 import ExternalMemberSsoAuth from './components/external-member-sso-auth'
 import { useWebAppStore } from '@/context/web-app-context'
+import { getSigninPath } from '@/utils/route-utils'
 
 const WebSSOForm: FC = () => {
   const { t } = useTranslation()
@@ -21,9 +22,7 @@ const WebSSOForm: FC = () => {
   const redirectUrl = searchParams.get('redirect_url')
 
   const getSigninUrl = useCallback(() => {
-    const params = new URLSearchParams()
-    params.append('redirect_url', redirectUrl || '')
-    return `/webapp-signin?${params.toString()}`
+    return getSigninPath(redirectUrl || '')
   }, [redirectUrl])
 
   const backToHome = useCallback(() => {

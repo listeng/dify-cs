@@ -7,6 +7,7 @@ import {
   RiEqualizer2Line,
 } from '@remixicon/react'
 import { usePathname, useRouter } from 'next/navigation'
+import { getSigninPath } from '@/utils/route-utils'
 import Divider from '../../base/divider'
 import InfoModal from './info-modal'
 import ActionButton from '@/app/components/base/action-button'
@@ -50,7 +51,7 @@ const MenuDropdown: FC<Props> = ({
   const handleLogout = useCallback(() => {
     localStorage.removeItem('token')
     localStorage.removeItem('webapp_access_token')
-    router.replace(`/webapp-signin?redirect_url=${pathname}`)
+    router.replace(getSigninPath(pathname))
   }, [router, pathname])
 
   const [show, setShow] = useState(false)

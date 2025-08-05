@@ -4,6 +4,7 @@ import { SWRConfig } from 'swr'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { getRoutePath, INSTALL, SIGNIN } from '@/utils/route-utils'
 import { fetchSetupStatus } from '@/service/common'
 import {
   EDUCATION_VERIFYING_LOCALSTORAGE_ITEM,
@@ -53,11 +54,11 @@ const SwrInitializer = ({
       try {
         const isFinished = await isSetupFinished()
         if (!isFinished) {
-          router.replace('/install')
+          router.replace(getRoutePath(INSTALL))
           return
         }
         if (!((consoleToken && refreshToken) || (consoleTokenFromLocalStorage && refreshTokenFromLocalStorage))) {
-          router.replace('/signin')
+          router.replace(getRoutePath(SIGNIN))
           return
         }
         if (searchParams.has('access_token') || searchParams.has('refresh_token')) {

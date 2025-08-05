@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { RiArrowLeftLine, RiLockPasswordLine } from '@remixicon/react'
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
+import { getSigninPath } from '@/utils/route-utils'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useContext } from 'use-context-selector'
 import { COUNT_DOWN_KEY, COUNT_DOWN_TIME_MS } from '@/app/components/signin/countdown'
@@ -94,7 +95,7 @@ export default function CheckCode() {
     <div className='py-2'>
       <div className='h-px bg-gradient-to-r from-background-gradient-mask-transparent via-divider-regular to-background-gradient-mask-transparent'></div>
     </div>
-    <Link href={`/webapp-signin?${searchParams.toString()}`} className='flex h-9 items-center justify-center text-text-tertiary hover:text-text-primary'>
+    <Link href={getSigninPath('', undefined, undefined, Object.fromEntries(searchParams.entries()))} className='flex h-9 items-center justify-center text-text-tertiary hover:text-text-primary'>
       <div className='inline-block rounded-full bg-background-default-dimmed p-1'>
         <RiArrowLeftLine size={12} />
       </div>

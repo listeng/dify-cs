@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getRoutePath, APPS } from '@/utils/route-utils'
 import { RiContractLine, RiDoorLockLine, RiErrorWarningFill } from '@remixicon/react'
 import Loading from '../components/base/loading'
 import MailAndCodeAuth from './components/mail-and-code-auth'
@@ -37,7 +38,7 @@ const NormalForm = () => {
       if (consoleToken && refreshToken) {
         localStorage.setItem('console_token', consoleToken)
         localStorage.setItem('refresh_token', refreshToken)
-        router.replace('/apps')
+        router.replace(getRoutePath(APPS))
         return
       }
 

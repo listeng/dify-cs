@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useCallback } from 'react'
 import { useWebAppStore } from '@/context/web-app-context'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getSigninPath } from '@/utils/route-utils'
 import AppUnavailable from '@/app/components/base/app-unavailable'
 import { checkOrSetAccessToken, removeAccessToken, setAccessToken } from '@/app/components/share/utils'
 import { useTranslation } from 'react-i18next'
@@ -22,10 +23,10 @@ const Splash: FC<PropsWithChildren> = ({ children }) => {
   const message = searchParams.get('message')
   const code = searchParams.get('code')
   const getSigninUrl = useCallback(() => {
-    const params = new URLSearchParams(searchParams)
+    const params = new URLSearchParams(searchParams.toString())
     params.delete('message')
     params.delete('code')
-    return `/webapp-signin?${params.toString()}`
+    return getSigninPath('', undefined, undefined, Object.fromEntries(params.entries()))
   }, [searchParams])
 
   const backToHome = useCallback(() => {

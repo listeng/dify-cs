@@ -3,6 +3,7 @@ import { RiArrowLeftLine, RiMailSendFill } from '@remixicon/react'
 import { useTranslation } from 'react-i18next'
 import { useCallback, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getRoutePath } from '@/utils/route-utils'
 import { useContext } from 'use-context-selector'
 import Countdown from '@/app/components/signin/countdown'
 import Button from '@/app/components/base/button'
@@ -78,9 +79,9 @@ export default function CheckCode() {
     try {
       const ret = await sendWebAppEMailLoginCode(email, locale)
       if (ret.result === 'success') {
-        const params = new URLSearchParams(searchParams)
+        const params = new URLSearchParams(searchParams.toString())
         params.set('token', encodeURIComponent(ret.data))
-        router.replace(`/webapp-signin/check-code?${params.toString()}`)
+        router.replace(getRoutePath('webapp-signin/check-code', Object.fromEntries(params.entries())))
       }
     }
     catch (error) { console.error(error) }

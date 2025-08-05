@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getRoutePath } from '@/utils/route-utils'
 import { useContext } from 'use-context-selector'
 import Input from '@/app/components/base/input'
 import Button from '@/app/components/base/button'
@@ -38,10 +39,10 @@ export default function MailAndCodeAuth() {
       const ret = await sendWebAppEMailLoginCode(email, locale)
       if (ret.result === 'success') {
         localStorage.setItem(COUNT_DOWN_KEY, `${COUNT_DOWN_TIME_MS}`)
-        const params = new URLSearchParams(searchParams)
+        const params = new URLSearchParams(searchParams.toString())
         params.set('email', encodeURIComponent(email))
         params.set('token', encodeURIComponent(ret.data))
-        router.push(`/webapp-signin/check-code?${params.toString()}`)
+        router.push(getRoutePath('webapp-signin/check-code', Object.fromEntries(params.entries())))
       }
     }
     catch (error) {
