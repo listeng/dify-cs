@@ -131,6 +131,11 @@
       ...await getCompressedUserVariablesFromConfig()
     });
 
+    // Add hideparams parameter if specified in systemVariables
+    if (config?.systemVariables?.hideparams === '1' || config?.systemVariables?.hideparams === 1) {
+      params.set('hideparams', '1');
+    }
+
     const baseUrl =
       config.baseUrl || `https://${config.isDev ? "dev." : ""}udify.app`;
     const targetOrigin = new URL(baseUrl).origin;
