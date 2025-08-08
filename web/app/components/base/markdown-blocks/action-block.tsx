@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from 'react'
+import React, { memo, useCallback, useEffect } from 'react'
 import Button from '@/app/components/base/button'
 import { Target04 } from '@/app/components/base/icons/src/vender/solid/general'
 
@@ -101,6 +101,14 @@ const ActionBlock = ({ content }: { content: string }) => {
 
   const actionData = parseActionContent(content)
 
+  // 如果 autorun 为 true，组件渲染后自动执行 action
+  useEffect(() => {
+    if (actionData && actionData.autorun) {
+      console.log('Auto-running action:', actionData)
+      handleActionClick(actionData)
+    }
+  }, [actionData, handleActionClick])
+
   if (!actionData) {
     return (
       <div className="p-4 bg-background-warning-subtle border border-divider-subtle rounded-lg">
@@ -135,14 +143,14 @@ const ActionBlock = ({ content }: { content: string }) => {
             variant={getButtonVariant()}
             size="md"
             onClick={() => handleActionClick(actionData)}
-            className="flex items-center gap-2 p-2"
+            className="flex items-center gap-2 rounded px-2 py-1"
           >
             {getButtonIcon()}
             {actionData.label || actionData.action}
           </Button>
         </div>
 
-        {actionData.debug (
+        {actionData.debug && (
           <details className="text-xs">
             <summary className="text-text-tertiary cursor-pointer hover:text-text-secondary">
               查看数据
