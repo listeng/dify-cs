@@ -140,23 +140,35 @@ export const {
  * @returns 完整的登录页面 URL
  */
 export const getSigninPath = (
-  redirectUrl: string = '', 
-  message?: string, 
+  redirectUrl: string = '',
+  message?: string,
   code?: number
 ): string => {
-  const params: Record<string, string> = {}
-  
-  if (redirectUrl) {
-    params.redirect_url = redirectUrl
+  const baseNoSlash = basePath.replace(/^\/+/, '')
+
+  const stripBasePrefix = (url: string): string => {
+    if (!url) return url
+    const trimmed = url.trim()
+    // 移除一次性前缀 '/dnrai' 或 'dnrai'，仅当后面是结束或 '/'
+    const pattern = new RegExp(`^(?:/${baseNoSlash}|${baseNoSlash})(?=$|/)`)
+    return trimmed.replace(pattern, '')
   }
-  
+
+  const cleanedRedirect = stripBasePrefix(redirectUrl)
+
+  const params: Record<string, string> = {}
+
+  if (cleanedRedirect) {
+    params.redirect_url = cleanedRedirect
+  }
+
   if (message) {
     params.message = message
   }
-  
+
   if (code !== undefined) {
     params.code = String(code)
   }
-  
+
   return getRoutePath('webapp-signin', params)
 }

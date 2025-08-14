@@ -28,22 +28,40 @@ type RoutePath = typeof ROUTE_PATHS[keyof typeof ROUTE_PATHS]
  * @param params 可选的查询参数对象
  * @returns 完整的 URL 路径，包含 basePath 和查询参数
  */
-export const getRoutePath = (path: string, params?: Record<string, string | number | boolean | null | undefined>): string => {
-  // 确保 path 不以斜杠开头
-  const normalizedPath = path.startsWith('/') ? path.slice(1) : path
-  
+export const getRoutePath = (
+  path: string,
+  params?: Record<string, string | number | boolean | null | undefined>
+): string => {
+  // 规范化 basePath：去掉首尾多余斜杠，保留中间部分
+  const base = (basePath || '').replace(/^\/+|\/+$/g, '') // e.g. 'dnrai' 或 ''
+  const normalizedBasePath = base ? `/${base}` : ''        // e.g. '/dnrai' 或 ''
+
+  // 规范化 path：去掉开头的斜杠
+  let normalizedPath = path.replace(/^\/+/, '')
+
+  // 如果 path 以 basePath 段开头（dnrai 或 dnrai/），去重
+  if (base) {
+    if (normalizedPath === base) {
+      normalizedPath = ''
+    } else if (normalizedPath.startsWith(base + '/')) {
+      normalizedPath = normalizedPath.slice(base.length + 1)
+    }
+  }
+
   // 处理查询参数
-  const queryString = params 
-    ? '?' + new URLSearchParams(
+  const queryString = params
+    ? '?' +
+      new URLSearchParams(
         Object.entries(params)
-          .filter(([_, value]) => value != null) // 过滤掉 null 和 undefined
-          .map(([key, value]) => [key, String(value)])
+          .filter(([, value]) => value != null) // 过滤 null 和 undefined
+          .map(([key, value]) => [key, String(value)]) // 统一转为字符串
       ).toString()
     : ''
-    
-  return `${basePath}/${normalizedPath}${queryString}`
-    .replace(/\/+/g, '/') // 移除连续的斜杠
-    .replace(/([^:])\/+$/, '$1') // 移除路径末尾的斜杠
+
+  // 拼接并清理多余斜杠与末尾斜杠
+  return `${normalizedBasePath}/${normalizedPath}${queryString}`
+    .replace(/\/+/g, '/')          // 合并重复 /
+    .replace(/([^:])\/+$/, '$1')   // 移除末尾 /
 }
 
 /**
