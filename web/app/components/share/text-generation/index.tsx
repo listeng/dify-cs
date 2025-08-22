@@ -83,7 +83,7 @@ const TextGeneration: FC<IMainProps> = ({
   const mode = searchParams.get('mode') || 'create'
   const canBatch = searchParams.get('canbatch') !== '0' // 当canbatch=0时禁用批量运行
   const autoRun = searchParams.get('autorun') === '1' // 当autorun=1时自动运行
-  const showDetail = searchParams.get('showdetail') === '1' // 当showdetail=1时显示详情面板，默认为0
+  const showDetail = searchParams.get('showdetail') !== '0' // 当showdetail=0时隐藏详情标签页，默认为显示
   const [currentTab, setCurrentTab] = useState<string>(['create', 'batch'].includes(mode) && canBatch ? mode : 'create')
 
   // Notice this situation isCallBatchAPI but not in batch tab
@@ -340,8 +340,8 @@ const TextGeneration: FC<IMainProps> = ({
     showResultPanel()
   }
   const handleCompleted = (completionRes: string, taskId?: number, isSuccess?: boolean) => {
-    // 如果是autorun模式且showDetail为0，设置自动折叠workflow过程面板
-    if (autoRun && !showDetail && isWorkflow && isSuccess)
+    // 如果是workflow模式且运行成功，设置自动折叠workflow过程面板
+    if (isWorkflow && isSuccess)
       setShouldAutoCollapseWorkflow(true)
 
     const allTaskListLatest = getLatestTaskList()
@@ -420,8 +420,8 @@ const TextGeneration: FC<IMainProps> = ({
       setMoreLikeThisConfig(more_like_this)
       setTextToSpeechConfig(text_to_speech)
 
-      // 自动运行功能：当autorun=1且为workflow时，使用URL参数作为输入并自动运行
-      if (autoRun && isWorkflow && prompt_variables.length > 0 && !hasAutoRunExecuted.current) {
+      // URL参数填充功能：当为workflow时，使用URL参数作为输入
+      if (isWorkflow && prompt_variables.length > 0) {
         const urlInputs: Record<string, any> = {}
         prompt_variables.forEach((variable) => {
           const paramValue = searchParams.get(variable.key)
@@ -429,14 +429,17 @@ const TextGeneration: FC<IMainProps> = ({
             urlInputs[variable.key] = paramValue
         })
 
-        // 如果有匹配的参数，设置输入并触发运行
+        // 如果有匹配的参数，设置输入
         if (Object.keys(urlInputs).length > 0) {
-          hasAutoRunExecuted.current = true // 标记已执行自动运行，防止重复执行
           setInputs(urlInputs)
-          // 延迟执行以确保组件完全初始化
-          setTimeout(() => {
-            handleSend()
-          }, 100)
+          // 自动运行功能：只有当autorun=1时才自动触发运行
+          if (autoRun && !hasAutoRunExecuted.current) {
+            hasAutoRunExecuted.current = true // 标记已执行自动运行，防止重复执行
+            // 延迟执行以确保组件完全初始化
+            setTimeout(() => {
+              handleSend()
+            }, 100)
+          }
         }
       }
     })()
@@ -487,6 +490,7 @@ const TextGeneration: FC<IMainProps> = ({
     siteInfo={siteInfo}
     onRunStart={() => setResultExisted(true)}
     shouldAutoCollapseWorkflow={shouldAutoCollapseWorkflow}
+    showDetail={showDetail}
   />)
 
   const renderBatchRes = () => {

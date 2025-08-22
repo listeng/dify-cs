@@ -62,6 +62,7 @@ export type IGenerationItemProps = {
   siteInfo: SiteInfo | null
   inSidePanel?: boolean
   shouldAutoCollapseWorkflow?: boolean
+  showDetail?: boolean
 }
 
 export const copyIcon = (
@@ -97,6 +98,7 @@ const GenerationItem: FC<IGenerationItemProps> = ({
   siteInfo,
   inSidePanel,
   shouldAutoCollapseWorkflow,
+  showDetail = true,
 }) => {
   const { t } = useTranslation()
   const params = useParams()
@@ -205,9 +207,17 @@ const GenerationItem: FC<IGenerationItemProps> = ({
   useEffect(() => {
     if (workflowProcessData?.resultText || !!workflowProcessData?.files?.length)
       switchTab('RESULT')
-    else
+    else if (showDetail)
       switchTab('DETAIL')
-  }, [workflowProcessData?.files?.length, workflowProcessData?.resultText])
+    else
+      switchTab('RESULT')
+  }, [workflowProcessData?.files?.length, workflowProcessData?.resultText, showDetail])
+
+  // 当 showDetail 为 false 且当前标签页是 DETAIL 时，自动切换到 RESULT
+  useEffect(() => {
+    if (!showDetail && currentTab === 'DETAIL')
+      switchTab('RESULT')
+  }, [showDetail, currentTab])
 
   return (
     <>
@@ -255,18 +265,20 @@ const GenerationItem: FC<IGenerationItemProps> = ({
                           )}
                           onClick={() => switchTab('RESULT')}
                         >{t('runLog.result')}</div>
-                        <div
-                          className={cn(
-                            'system-sm-semibold-uppercase cursor-pointer border-b-2 border-transparent py-3 text-text-tertiary',
-                            currentTab === 'DETAIL' && 'border-util-colors-blue-brand-blue-brand-600 text-text-primary',
-                          )}
-                          onClick={() => switchTab('DETAIL')}
-                        >{t('runLog.detail')}</div>
+                        {showDetail && (
+                          <div
+                            className={cn(
+                              'system-sm-semibold-uppercase cursor-pointer border-b-2 border-transparent py-3 text-text-tertiary',
+                              currentTab === 'DETAIL' && 'border-util-colors-blue-brand-blue-brand-600 text-text-primary',
+                            )}
+                            onClick={() => switchTab('DETAIL')}
+                          >{t('runLog.detail')}</div>
+                        )}
                       </div>
                     )}
                   </div>
                   {!isError && (
-                    <ResultTab data={workflowProcessData} content={content} currentTab={currentTab} />
+                    <ResultTab data={workflowProcessData} content={content} currentTab={currentTab} showDetail={showDetail} />
                   )}
                 </>
               )}

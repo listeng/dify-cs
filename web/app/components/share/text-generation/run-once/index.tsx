@@ -64,17 +64,20 @@ const RunOnce: FC<IRunOnceProps> = ({
   }, [onInputsChange, inputsRef])
 
   useEffect(() => {
-    const newInputs: Record<string, any> = {}
-    promptConfig.prompt_variables.forEach((item) => {
-      if (item.type === 'select')
-        newInputs[item.key] = item.default
-      else if (item.type === 'string' || item.type === 'paragraph')
-        newInputs[item.key] = ''
-      else
-        newInputs[item.key] = undefined
-    })
-    onInputsChange(newInputs)
-  }, [promptConfig.prompt_variables, onInputsChange])
+    // 只在inputs为空或未定义时初始化，避免覆盖已有的值（如URL参数填充的值）
+    if (!inputs || Object.keys(inputs).length === 0) {
+      const newInputs: Record<string, any> = {}
+      promptConfig.prompt_variables.forEach((item) => {
+        if (item.type === 'select')
+          newInputs[item.key] = item.default
+        else if (item.type === 'string' || item.type === 'paragraph')
+          newInputs[item.key] = ''
+        else
+          newInputs[item.key] = undefined
+      })
+      onInputsChange(newInputs)
+    }
+  }, [promptConfig.prompt_variables, inputs, onInputsChange])
 
   return (
     <div className="">

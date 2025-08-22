@@ -11,10 +11,12 @@ const ResultTab = ({
   data,
   content,
   currentTab,
+  showDetail = true,
 }: {
   data?: WorkflowProcess
   content: any
   currentTab: string
+  showDetail?: boolean
 }) => {
   return (
     <>
@@ -38,7 +40,7 @@ const ResultTab = ({
           )}
         </div>
       )}
-      {currentTab === 'DETAIL' && content && (
+      {currentTab === 'DETAIL' && content && showDetail && (
         <div className='p-4'>
           <CodeEditor
             readOnly

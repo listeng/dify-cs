@@ -46,6 +46,7 @@ export type IResultProps = {
   siteInfo: SiteInfo | null
   onRunStart: () => void
   shouldAutoCollapseWorkflow?: boolean
+  showDetail?: boolean
 }
 
 const Result: FC<IResultProps> = ({
@@ -72,6 +73,7 @@ const Result: FC<IResultProps> = ({
   siteInfo,
   onRunStart,
   shouldAutoCollapseWorkflow,
+  showDetail = true,
 }) => {
   const [isResponding, { setTrue: setRespondingTrue, setFalse: setRespondingFalse }] = useBoolean(false)
   useEffect(() => {
@@ -80,14 +82,14 @@ const Result: FC<IResultProps> = ({
   }, [controlStopResponding])
 
   const [completionRes, doSetCompletionRes] = useState<any>('')
-  const completionResRef = useRef<any>()
+  const completionResRef = useRef<any>('')
   const setCompletionRes = (res: any) => {
     completionResRef.current = res
     doSetCompletionRes(res)
   }
   const getCompletionRes = () => completionResRef.current
   const [workflowProcessData, doSetWorkflowProcessData] = useState<WorkflowProcess>()
-  const workflowProcessDataRef = useRef<WorkflowProcess>()
+  const workflowProcessDataRef = useRef<WorkflowProcess | undefined>(undefined)
   const setWorkflowProcessData = (data: WorkflowProcess) => {
     workflowProcessDataRef.current = data
     doSetWorkflowProcessData(data)
@@ -431,6 +433,7 @@ const Result: FC<IResultProps> = ({
       hideProcessDetail
       siteInfo={siteInfo}
       shouldAutoCollapseWorkflow={shouldAutoCollapseWorkflow}
+      showDetail={showDetail}
     />
   )
 
