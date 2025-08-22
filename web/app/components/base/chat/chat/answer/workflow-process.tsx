@@ -21,6 +21,7 @@ type WorkflowProcessProps = {
   hideInfo?: boolean
   hideProcessDetail?: boolean
   readonly?: boolean
+  shouldAutoCollapseWorkflow?: boolean
 }
 const WorkflowProcessItem = ({
   data,
@@ -28,6 +29,7 @@ const WorkflowProcessItem = ({
   hideInfo = false,
   hideProcessDetail = false,
   readonly = false,
+  shouldAutoCollapseWorkflow = false,
 }: WorkflowProcessProps) => {
   const { t } = useTranslation()
   const [collapse, setCollapse] = useState(!expand)
@@ -38,6 +40,12 @@ const WorkflowProcessItem = ({
   useEffect(() => {
     setCollapse(!expand)
   }, [expand])
+
+  // 当shouldAutoCollapseWorkflow为true且工作流运行完毕时，自动折叠面板
+  useEffect(() => {
+    if (shouldAutoCollapseWorkflow && (succeeded || failed))
+      setCollapse(true)
+  }, [shouldAutoCollapseWorkflow, succeeded, failed])
 
   return (
     <div

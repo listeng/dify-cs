@@ -55,6 +55,7 @@ const OPTION_MAP = {
   systemVariables: {
     // user_id: 'YOU CAN DEFINE USER ID HERE',
     // conversation_id: 'YOU CAN DEFINE CONVERSATION ID HERE, IT MUST BE A VALID UUID',
+    // hideparams: '1', // SET TO '1' TO HIDE/COLLAPSE THE CHAT SETTINGS PANEL
   },
   userVariables: {
     // avatar_url: 'YOU CAN DEFINE USER AVATAR URL HERE',

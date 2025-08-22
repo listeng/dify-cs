@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dify Chatbot 测试</title>
+</head>
+<body>
+    <h1>Dify Chatbot 测试页面</h1>
+    <p>这是一个测试页面，用于测试 Dify Chatbot 的嵌入功能。</p>
+
+    <div>
+      <input type="text" value="who" id="messageInput" placeholder="输入要发送的消息">
+      <button onclick="sendMessage()">发送到聊天机器人</button>
+    </div>
+    
+    <script>
+     window.difyChatbotConfig = {
+      token: 'KgQTIslXfe5q7eQ4',
+      isDev: true,
+      baseUrl: 'http://localhost:3000/dnrai',
+      inputs: {
+        // You can define the inputs from the Start node here
+        // key is the variable name
+        // e.g.
+        name: "TLS",
+      },
+      systemVariables: {
+        // user_id: 'YOU CAN DEFINE USER ID HERE',
+        // conversation_id: 'YOU CAN DEFINE CONVERSATION ID HERE, IT MUST BE A VALID UUID',
+        hideparams: '1', // SET TO '1' TO HIDE/COLLAPSE THE CHAT SETTINGS PANEL
+        isnew: '1', // SET TO '1' TO FORCE CREATE NEW CONVERSATION
+      },
+      userVariables: {
+        // avatar_url: 'YOU CAN DEFINE USER AVATAR URL HERE',
+        // name: 'YOU CAN DEFINE USER NAME HERE',
+      },
+     }
+    </script>
+    <script
+     src="http://localhost:3000/dnrai/embed.min.js"
+     id="KgQTIslXfe5q7eQ4"
+     defer>
+    </script>
+
+    <script>
+      
+      function sendMessage() {
+          const chatbotIframe = document.getElementById('dify-chatbot-bubble-window');
+
+          const messageInput = document.getElementById('messageInput');
+          const message = messageInput.value.trim();
+          
+          if (message) {
+              chatbotIframe.contentWindow.postMessage({
+                  type: 'DIFY_CHAT_SEND_MESSAGE',
+                  message: message
+              }, '*');
+          }
+      }
+      
+    </script>
+    <style>
+      #dify-chatbot-bubble-button {
+        background-color: #1C64F2 !important;
+      }
+      #dify-chatbot-bubble-window {
+        width: 24rem !important;
+        height: 40rem !important;
+      }
+    </style>
+</body>
+</html>

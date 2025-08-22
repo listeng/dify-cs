@@ -24,7 +24,7 @@ const ToolItem = ({
 }: Props) => {
   const { locale } = useContext(I18n)
   const language = getLanguage(locale)
-  const [showDetail, setShowDetail] = useState(false)
+  const [showDetail, setShowDetail] = useState(true)
 
   return (
     <>

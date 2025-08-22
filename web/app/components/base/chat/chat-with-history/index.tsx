@@ -2,6 +2,7 @@
 import type { FC } from 'react'
 import {
   useEffect,
+  useRef,
   useState,
 } from 'react'
 import { useAsyncEffect } from 'ahooks'
@@ -36,12 +37,33 @@ const ChatWithHistory: FC<ChatWithHistoryProps> = ({
     isMobile,
     themeBuilder,
     sidebarCollapseState,
+    handleNewConversation,
   } = useChatWithHistoryContext()
   const isSidebarCollapsed = sidebarCollapseState
   const customConfig = appData?.custom_config
   const site = appData?.site
 
   const [showSidePanel, setShowSidePanel] = useState(false)
+
+  // 用于跟踪是否已经处理过isnew参数
+  const isNewProcessedRef = useRef(false)
+
+  // 检查URL参数并自动创建新对话
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isNewProcessedRef.current) {
+      const searchParams = new URLSearchParams(window.location.search)
+      const isNew = searchParams.get('isnew')
+
+      // 当 isnew=1 时，强制创建新对话（不管是否有现有对话）
+      // 使用 setTimeout 延迟执行，避免在渲染过程中触发状态更新
+      if (isNew === '1') {
+        isNewProcessedRef.current = true // 标记已处理
+        setTimeout(() => {
+          handleNewConversation()
+        }, 0)
+      }
+    }
+  }, []) // 只在组件挂载时执行一次
 
   useEffect(() => {
     themeBuilder?.buildTheme(site?.chat_color_theme, site?.chat_color_theme_inverted)

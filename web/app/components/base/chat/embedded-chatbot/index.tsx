@@ -1,6 +1,8 @@
 'use client'
 import {
   useEffect,
+  useMemo,
+  useRef,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -30,6 +32,8 @@ const Chatbot = () => {
     chatShouldReloadKey,
     handleNewConversation,
     themeBuilder,
+    systemVariables,
+    appId,
   } = useEmbeddedChatbotContext()
   const { t } = useTranslation()
   const systemFeatures = useGlobalPublicStore(s => s.systemFeatures)
@@ -38,6 +42,27 @@ const Chatbot = () => {
   const site = appData?.site
 
   const difyIcon = <LogoHeader />
+
+  // 用于跟踪是否已经处理过isnew参数
+  const isNewProcessedRef = useRef(false)
+
+  // 检查systemVariables并自动创建新对话
+  useEffect(() => {
+    if (!isNewProcessedRef.current && Object.keys(systemVariables).length > 0 && appId) {
+      const isNew = systemVariables.isnew === '1'
+      console.log(`IsNew check: isNew=${isNew}, systemVariables=${JSON.stringify(systemVariables)}, appId=${appId}`)
+
+      // 当 isnew=1 时，强制创建新对话（不管是否有现有对话）
+      // 等待appId加载完成后再执行，确保清除正确的localStorage key
+      if (isNew) {
+        console.log('Creating new conversation due to isnew=1')
+        isNewProcessedRef.current = true // 标记已处理
+        setTimeout(() => {
+          handleNewConversation()
+        }, 100)
+      }
+    }
+  }, [handleNewConversation, systemVariables, appId])
 
   useEffect(() => {
     themeBuilder?.buildTheme(site?.chat_color_theme, site?.chat_color_theme_inverted)
@@ -79,13 +104,15 @@ const Chatbot = () => {
               'flex shrink-0 items-center gap-1.5 px-2',
             )}>
               <div className='system-2xs-medium-uppercase text-text-tertiary'>{t('share.chat.poweredBy')}</div>
-              {
-                systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo
-                  ? <img src={systemFeatures.branding.workspace_logo} alt='logo' className='block h-5 w-auto' />
-                  : appData?.custom_config?.replace_webapp_logo
-                    ? <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt='logo' className='block h-5 w-auto' />
-                    : <DifyLogo size='small' />
-              }
+              {(() => {
+                if (systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo)
+                  return <img src={systemFeatures.branding.workspace_logo} alt='logo' className='block h-5 w-auto' />
+
+                if (appData?.custom_config?.replace_webapp_logo)
+                  return <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt='logo' className='block h-5 w-auto' />
+
+                return <DifyLogo size='small' />
+              })()}
             </div>
           )}
         </div>
@@ -132,9 +159,11 @@ const EmbeddedChatbotWrapper = () => {
     setCurrentConversationInputs,
     allInputsHidden,
     initUserVariables,
+    setAutoSendCallback,
+    systemVariables,
   } = useEmbeddedChatbot()
 
-  return <EmbeddedChatbotContext.Provider value={{
+  const contextValue = useMemo(() => ({
     userCanAccess,
     appData,
     appParams,
@@ -169,7 +198,36 @@ const EmbeddedChatbotWrapper = () => {
     setCurrentConversationInputs,
     allInputsHidden,
     initUserVariables,
-  }}>
+    setAutoSendCallback,
+    systemVariables,
+  }), [
+    // 只包含原始数据，不包含函数引用以避免循环依赖
+    userCanAccess,
+    appData,
+    appParams,
+    appMeta,
+    appChatListDataLoading,
+    currentConversationId,
+    currentConversationItem,
+    appPrevChatList,
+    pinnedConversationList,
+    conversationList,
+    newConversationInputs,
+    inputsForms,
+    chatShouldReloadKey,
+    isMobile,
+    isInstalledApp,
+    allowResetChat,
+    appId,
+    clearChatList,
+    isResponding,
+    currentConversationInputs,
+    allInputsHidden,
+    initUserVariables,
+    systemVariables,
+  ])
+
+  return <EmbeddedChatbotContext.Provider value={contextValue}>
     <Chatbot />
   </EmbeddedChatbotContext.Provider>
 }

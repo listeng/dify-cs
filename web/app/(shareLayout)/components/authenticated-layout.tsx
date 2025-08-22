@@ -7,7 +7,7 @@ import { useWebAppStore } from '@/context/web-app-context'
 import { useGetUserCanAccessApp } from '@/service/access-control'
 import { useGetWebAppInfo, useGetWebAppMeta, useGetWebAppParams } from '@/service/use-share'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { getSigninPath } from '../../../src/utils/route-utils'
+import { getSigninPath } from '@/utils/route-utils'
 import React, { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 

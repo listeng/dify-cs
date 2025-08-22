@@ -5,7 +5,7 @@ import { useDebounceFn } from 'ahooks'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getRoutePath, SIGNIN, APPS, INIT } from '@/utils/route-utils'
+import { INSTALL, SIGNIN, getRoutePath } from '@/utils/route-utils'
 
 import type { SubmitHandler } from 'react-hook-form'
 import { useForm } from 'react-hook-form'
@@ -89,7 +89,7 @@ const InstallForm = () => {
       else {
         fetchInitValidateStatus().then((res: InitValidateStatusResponse) => {
           if (res.status === 'not_started')
-            router.push(getRoutePath(INIT))
+            router.push(getRoutePath(INSTALL))
         })
       }
       setLoading(false)

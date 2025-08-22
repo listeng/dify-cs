@@ -56,6 +56,8 @@ export type EmbeddedChatbotContextValue = {
     name?: string
     avatar_url?: string
   }
+  setAutoSendCallback: (callback: ((message: string, files?: any[]) => void) | null) => void
+  systemVariables: Record<string, any>
 }
 
 export const EmbeddedChatbotContext = createContext<EmbeddedChatbotContextValue>({
@@ -86,5 +88,7 @@ export const EmbeddedChatbotContext = createContext<EmbeddedChatbotContextValue>
   setCurrentConversationInputs: noop,
   allInputsHidden: false,
   initUserVariables: {},
+  setAutoSendCallback: noop,
+  systemVariables: {},
 })
 export const useEmbeddedChatbotContext = () => useContext(EmbeddedChatbotContext)

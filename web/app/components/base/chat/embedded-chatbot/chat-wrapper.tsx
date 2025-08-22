@@ -51,6 +51,8 @@ const ChatWrapper = () => {
     setIsResponding,
     allInputsHidden,
     initUserVariables,
+    setAutoSendCallback,
+    systemVariables,
   } = useEmbeddedChatbotContext()
   const appConfig = useMemo(() => {
     const config = appParams || {}
@@ -65,6 +67,12 @@ const ChatWrapper = () => {
       opening_statement: currentConversationId ? currentConversationItem?.introduction : (config as any).opening_statement,
     } as ChatConfig
   }, [appParams, currentConversationItem?.introduction, currentConversationId])
+  // 决定使用哪个inputs：当hideparams=1和isnew=1时，优先使用newConversationInputs（来自URL）
+  const shouldAlwaysUseUrlInputs = systemVariables.hideparams === '1' && systemVariables.isnew === '1'
+  const effectiveInputs = shouldAlwaysUseUrlInputs
+    ? newConversationInputs
+    : (currentConversationId ? currentConversationInputs : newConversationInputs)
+
   const {
     chatList,
     setTargetMessageId,
@@ -75,7 +83,7 @@ const ChatWrapper = () => {
   } = useChat(
     appConfig,
     {
-      inputs: (currentConversationId ? currentConversationInputs : newConversationInputs) as any,
+      inputs: effectiveInputs as any,
       inputsForm: inputsForms,
     },
     appPrevChatList,
@@ -85,6 +93,10 @@ const ChatWrapper = () => {
   )
   const inputsFormValue = currentConversationId ? currentConversationInputs : newConversationInputsRef?.current
   const inputDisabled = useMemo(() => {
+    // hideparams=1 时不禁用输入框（允许继续发送）
+    if (systemVariables.hideparams === '1')
+      return false
+
     if (allInputsHidden)
       return false
 
@@ -117,7 +129,7 @@ const ChatWrapper = () => {
     if (fileIsUploading)
       return true
     return false
-  }, [inputsFormValue, inputsForms, allInputsHidden])
+  }, [inputsFormValue, inputsForms, allInputsHidden, systemVariables.hideparams])
 
   useEffect(() => {
     if (currentChatInstanceRef.current)
@@ -127,15 +139,30 @@ const ChatWrapper = () => {
     setIsResponding(respondingState)
   }, [respondingState, setIsResponding])
 
-  const doSend: OnSend = useCallback((message, files, isRegenerate = false, parentAnswer: ChatItem | null = null) => {
+  const doSend: OnSend = useCallback(async (message, files, isRegenerate = false, parentAnswer: ChatItem | null = null) => {
+    console.log('[ChatWrapper] doSend called', { message, currentConversationId, isRegenerate })
+    // 当hideparams=1和isnew=1时，始终从URL获取inputs参数
+    const shouldAlwaysUseUrlInputs = systemVariables.hideparams === '1' && systemVariables.isnew === '1'
+    let inputs
+    if (shouldAlwaysUseUrlInputs) {
+      // 从URL获取最新的inputs参数
+      const { getProcessedInputsFromUrlParams } = await import('../utils')
+      inputs = await getProcessedInputsFromUrlParams()
+      console.log(`Using URL inputs due to hideparams=1 and isnew=1: ${JSON.stringify(inputs)}`)
+    }
+    else {
+      inputs = currentConversationId ? currentConversationInputs : newConversationInputs
+    }
+
     const data: any = {
       query: message,
       files,
-      inputs: currentConversationId ? currentConversationInputs : newConversationInputs,
+      inputs,
       conversation_id: currentConversationId,
       parent_message_id: (isRegenerate ? parentAnswer?.id : getLastAnswer(chatList)?.id) || null,
     }
 
+    console.log('[ChatWrapper] calling handleSend with data:', data)
     handleSend(
       getUrl('chat-messages', isInstalledApp, appId || ''),
       data,
@@ -145,7 +172,12 @@ const ChatWrapper = () => {
         isPublicAPI: !isInstalledApp,
       },
     )
-  }, [currentConversationId, currentConversationInputs, newConversationInputs, chatList, handleSend, isInstalledApp, appId, handleNewConversationCompleted])
+  }, [currentConversationId, currentConversationInputs, newConversationInputs, chatList, handleSend, isInstalledApp, appId, handleNewConversationCompleted, systemVariables.hideparams, systemVariables.isnew])
+
+  // 注册doSend回调供postMessage使用
+  useEffect(() => {
+    setAutoSendCallback(doSend)
+  }, [doSend, setAutoSendCallback])
 
   const doRegenerate = useCallback((chatItem: ChatItemInTree, editedQuestion?: { message: string, files?: FileEntity[] }) => {
     const question = editedQuestion ? chatItem : chatList.find(item => item.id === chatItem.parentMessageId)!
@@ -163,14 +195,17 @@ const ChatWrapper = () => {
     return chatList.filter(item => !item.isOpeningStatement)
   }, [chatList, currentConversationId])
 
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search)
-      if (searchParams.get('hideparams') === '1')
-        return true
+  const [collapsed, setCollapsed] = useState(!!currentConversationId)
+
+  // 当systemVariables更新时，检查hideparams并更新collapsed状态
+  useEffect(() => {
+    const hideParams = systemVariables.hideparams === '1'
+    console.log(`Collapsed state update: hideParams=${hideParams}, systemVariables=${JSON.stringify(systemVariables)}`)
+    if (hideParams) {
+      console.log('Setting collapsed=true due to hideparams=1')
+      setCollapsed(true)
     }
-    return !!currentConversationId
-  })
+  }, [systemVariables.hideparams])
 
   const chatNode = useMemo(() => {
     if (allInputsHidden || !inputsForms.length)

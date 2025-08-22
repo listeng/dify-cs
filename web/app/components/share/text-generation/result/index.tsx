@@ -45,6 +45,7 @@ export type IResultProps = {
   completionFiles: VisionFile[]
   siteInfo: SiteInfo | null
   onRunStart: () => void
+  shouldAutoCollapseWorkflow?: boolean
 }
 
 const Result: FC<IResultProps> = ({
@@ -70,6 +71,7 @@ const Result: FC<IResultProps> = ({
   completionFiles,
   siteInfo,
   onRunStart,
+  shouldAutoCollapseWorkflow,
 }) => {
   const [isResponding, { setTrue: setRespondingTrue, setFalse: setRespondingFalse }] = useBoolean(false)
   useEffect(() => {
@@ -428,6 +430,7 @@ const Result: FC<IResultProps> = ({
       isShowTextToSpeech={isShowTextToSpeech}
       hideProcessDetail
       siteInfo={siteInfo}
+      shouldAutoCollapseWorkflow={shouldAutoCollapseWorkflow}
     />
   )
 

@@ -83,6 +83,7 @@ const TextGeneration: FC<IMainProps> = ({
   const mode = searchParams.get('mode') || 'create'
   const canBatch = searchParams.get('canbatch') !== '0' // 当canbatch=0时禁用批量运行
   const autoRun = searchParams.get('autorun') === '1' // 当autorun=1时自动运行
+  const showDetail = searchParams.get('showdetail') === '1' // 当showdetail=1时显示详情面板，默认为0
   const [currentTab, setCurrentTab] = useState<string>(['create', 'batch'].includes(mode) && canBatch ? mode : 'create')
 
   // Notice this situation isCallBatchAPI but not in batch tab
@@ -129,6 +130,7 @@ const TextGeneration: FC<IMainProps> = ({
     transfer_methods: [TransferMethod.local_file],
   })
   const [completionFiles, setCompletionFiles] = useState<VisionFile[]>([])
+  const [shouldAutoCollapseWorkflow, setShouldAutoCollapseWorkflow] = useState(false)
 
   const hasAutoRunExecuted = useRef<boolean>(false)
   const isRunning = useRef<boolean>(false)
@@ -164,7 +166,7 @@ const TextGeneration: FC<IMainProps> = ({
   const pendingTaskList = allTaskList.filter(task => task.status === TaskStatus.pending)
   const noPendingTask = pendingTaskList.length === 0
   const showTaskList = allTaskList.filter(task => task.status !== TaskStatus.pending)
-  const [currGroupNum, doSetCurrGroupNum] = useState(0)
+  const [_currGroupNum, doSetCurrGroupNum] = useState(0)
   const currGroupNumRef = useRef(0)
   const setCurrGroupNum = (num: number) => {
     doSetCurrGroupNum(num)
@@ -177,7 +179,7 @@ const TextGeneration: FC<IMainProps> = ({
   const allFailedTaskList = allTaskList.filter(task => task.status === TaskStatus.failed)
   const allTasksFinished = allTaskList.every(task => task.status === TaskStatus.completed)
   const allTasksRun = allTaskList.every(task => [TaskStatus.completed, TaskStatus.failed].includes(task.status))
-  const [batchCompletionRes, doSetBatchCompletionRes] = useState<Record<string, string>>({})
+  const [_batchCompletionRes, doSetBatchCompletionRes] = useState<Record<string, string>>({})
   const batchCompletionResRef = useRef<Record<string, string>>({})
   const setBatchCompletionRes = (res: Record<string, string>) => {
     doSetBatchCompletionRes(res)
@@ -338,6 +340,10 @@ const TextGeneration: FC<IMainProps> = ({
     showResultPanel()
   }
   const handleCompleted = (completionRes: string, taskId?: number, isSuccess?: boolean) => {
+    // 如果是autorun模式且showDetail为0，设置自动折叠workflow过程面板
+    if (autoRun && !showDetail && isWorkflow && isSuccess)
+      setShouldAutoCollapseWorkflow(true)
+
     const allTaskListLatest = getLatestTaskList()
     const batchCompletionResLatest = getBatchCompletionRes()
     const pendingTaskList = allTaskListLatest.filter(task => task.status === TaskStatus.pending)
@@ -373,13 +379,12 @@ const TextGeneration: FC<IMainProps> = ({
 
     // 任务完成后重置 isRunning
     // 对于单次运行（taskId为undefined），直接重置isRunning状态
-    if (!taskId) {
+    if (!taskId)
       isRunning.current = false
-    }
+
     // 对于批量运行，检查所有任务是否完成
-    else if (!needToAddNextGroupTask && newAllTaskList.every(task => [TaskStatus.completed, TaskStatus.failed].includes(task.status))) {
+    else if (!needToAddNextGroupTask && newAllTaskList.every(task => [TaskStatus.completed, TaskStatus.failed].includes(task.status)))
       isRunning.current = false
-    }
   }
 
   const appData = useWebAppStore(s => s.appInfo)
@@ -420,11 +425,10 @@ const TextGeneration: FC<IMainProps> = ({
         const urlInputs: Record<string, any> = {}
         prompt_variables.forEach((variable) => {
           const paramValue = searchParams.get(variable.key)
-          if (paramValue !== null) {
+          if (paramValue !== null)
             urlInputs[variable.key] = paramValue
-          }
         })
-        
+
         // 如果有匹配的参数，设置输入并触发运行
         if (Object.keys(urlInputs).length > 0) {
           hasAutoRunExecuted.current = true // 标记已执行自动运行，防止重复执行
@@ -482,6 +486,7 @@ const TextGeneration: FC<IMainProps> = ({
     isShowTextToSpeech={!!textToSpeechConfig?.enabled}
     siteInfo={siteInfo}
     onRunStart={() => setResultExisted(true)}
+    shouldAutoCollapseWorkflow={shouldAutoCollapseWorkflow}
   />)
 
   const renderBatchRes = () => {
@@ -500,12 +505,17 @@ const TextGeneration: FC<IMainProps> = ({
           : 'bg-chatbot-bg',
       )}
     >
-      {/* AutoRun模式下的运行按钮 */}
+      {/* AutoRun模式下的运行按钮和标题 */}
       {autoRun && (
         <div className={cn(
-          'flex shrink-0 items-center justify-center border-b border-divider-subtle bg-components-panel-bg px-14 py-4',
+          'flex shrink-0 items-center justify-between border-b border-divider-subtle bg-components-panel-bg px-14 py-4',
           !isPC && 'px-4 py-3',
         )}>
+          {/* 标题区域 */}
+          <div className='flex items-center gap-3'>
+            <div className='system-md-semibold truncate text-text-secondary'>{siteInfo?.title}</div>
+          </div>
+          {/* 运行按钮 */}
           <Button
             onClick={handleSend}
             variant="primary"
@@ -698,6 +708,7 @@ const TextGeneration: FC<IMainProps> = ({
             <div className='h-1 w-8 cursor-grab rounded bg-divider-solid' />
           </div>
         )}
+        {/* 始终渲染结果面板，showDetail参数用于控制详情显示 */}
         {renderResWrap}
       </div>
     </div>

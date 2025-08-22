@@ -61,6 +61,7 @@ export type IGenerationItemProps = {
   hideProcessDetail?: boolean
   siteInfo: SiteInfo | null
   inSidePanel?: boolean
+  shouldAutoCollapseWorkflow?: boolean
 }
 
 export const copyIcon = (
@@ -95,6 +96,7 @@ const GenerationItem: FC<IGenerationItemProps> = ({
   hideProcessDetail,
   siteInfo,
   inSidePanel,
+  shouldAutoCollapseWorkflow,
 }) => {
   const { t } = useTranslation()
   const params = useParams()
@@ -241,6 +243,7 @@ const GenerationItem: FC<IGenerationItemProps> = ({
                         hideProcessDetail={hideProcessDetail}
                         hideInfo={hideProcessDetail}
                         readonly={!siteInfo.show_workflow_steps}
+                        shouldAutoCollapseWorkflow={shouldAutoCollapseWorkflow}
                       />
                     )}
                     {showResultTabs && (
