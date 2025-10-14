@@ -97,26 +97,35 @@ const Chatbot = () => {
         </div>
       </div>
       {/* powered by */}
-      {isMobile && (
-        <div className='flex h-[60px] shrink-0 items-center pl-2'>
-          {!appData?.custom_config?.remove_webapp_brand && (
-            <div className={cn(
-              'flex shrink-0 items-center gap-1.5 px-2',
-            )}>
-              <div className='system-2xs-medium-uppercase text-text-tertiary'>{t('share.chat.poweredBy')}</div>
-              {(() => {
-                if (systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo)
-                  return <img src={systemFeatures.branding.workspace_logo} alt='logo' className='block h-5 w-auto' />
+      {isMobile && (() => {
+        const copyrightParam = systemVariables.copyright
+        if (copyrightParam === '0')
+          return null
 
-                if (appData?.custom_config?.replace_webapp_logo)
-                  return <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt='logo' className='block h-5 w-auto' />
+        return (
+          <div className='flex h-[60px] shrink-0 items-center pl-2'>
+            {!appData?.custom_config?.remove_webapp_brand && (
+              <div className={cn(
+                'flex shrink-0 items-center gap-1.5 px-2',
+              )}>
+                <div className='system-2xs-medium-uppercase text-text-tertiary'>{t('share.chat.poweredBy')}</div>
+                {(() => {
+                  if (copyrightParam && copyrightParam !== '0')
+                    return <span className='system-2xs-medium text-text-tertiary'>{copyrightParam}</span>
 
-                return <DifyLogo size='small' />
-              })()}
-            </div>
-          )}
-        </div>
-      )}
+                  if (systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo)
+                    return <img src={systemFeatures.branding.workspace_logo} alt='logo' className='block h-5 w-auto' />
+
+                  if (appData?.custom_config?.replace_webapp_logo)
+                    return <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt='logo' className='block h-5 w-auto' />
+
+                  return <DifyLogo size='small' />
+                })()}
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

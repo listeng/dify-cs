@@ -2,7 +2,7 @@ import React, { memo, useCallback, useEffect } from 'react'
 import Button from '@/app/components/base/button'
 import { Target04 } from '@/app/components/base/icons/src/vender/solid/general'
 
-interface ActionData {
+type ActionData = {
   action: string
   data?: any
   label?: string
@@ -16,7 +16,7 @@ interface ActionData {
 const ActionBlock = ({ content }: { content: string }) => {
   const handleActionClick = useCallback((actionData: ActionData) => {
     console.log('Action clicked:', actionData)
-    
+
     // 1. 首先推送数据给父页面（如果在iframe中）
     try {
       // 检查是否在iframe中
@@ -26,32 +26,33 @@ const ActionBlock = ({ content }: { content: string }) => {
           type: 'dify-action-click',
           data: actionData,
           timestamp: Date.now(),
-          source: 'dify-chat'
+          source: 'dify-chat',
         }, '*')
-        
+
         console.log('Action data sent to parent window:', actionData)
       }
-      
+
       // 也发送给顶级窗口（防止多层iframe嵌套）
       if (window.top && window.top !== window) {
         window.top.postMessage({
           type: 'dify-action-click',
           data: actionData,
           timestamp: Date.now(),
-          source: 'dify-chat'
+          source: 'dify-chat',
         }, '*')
       }
-    } catch (error) {
+    }
+ catch (error) {
       console.warn('Failed to send message to parent window:', error)
     }
-    
+
     // 2. 发送自定义DOM事件（用于当前页面内的组件通信）
     const event = new CustomEvent('actionButtonClick', {
       detail: actionData,
-      bubbles: true
+      bubbles: true,
     })
     document.dispatchEvent(event)
-    
+
     // 3. 执行内置操作（可选，根据需要保留或移除）
     switch (actionData.action) {
       case 'navigate':
@@ -60,7 +61,8 @@ const ActionBlock = ({ content }: { content: string }) => {
           if (window.parent && window.parent !== window) {
             // 已通过postMessage发送，让父页面决定如何处理
             console.log('Navigation request sent to parent')
-          } else {
+          }
+ else {
             window.open(actionData.data.url, '_blank')
           }
         }
@@ -86,14 +88,14 @@ const ActionBlock = ({ content }: { content: string }) => {
     try {
       const trimmedContent = content.trim()
       const parsed = JSON.parse(trimmedContent)
-      
+
       // 验证是否为有效的action格式
-      if (typeof parsed === 'object' && parsed !== null && parsed.action) {
+      if (typeof parsed === 'object' && parsed !== null && parsed.action)
         return parsed as ActionData
-      }
-      
+
       return null
-    } catch (error) {
+    }
+ catch (error) {
       console.error('Failed to parse action content:', error)
       return null
     }
@@ -111,9 +113,9 @@ const ActionBlock = ({ content }: { content: string }) => {
 
   if (!actionData) {
     return (
-      <div className="p-4 bg-background-warning-subtle border border-divider-subtle rounded-lg">
-        <p className="text-text-warning text-sm">无效的action格式</p>
-        <pre className="text-xs text-text-tertiary mt-2 overflow-auto">
+      <div className="bg-background-warning-subtle rounded-lg border border-divider-subtle p-4">
+        <p className="text-sm text-text-warning">无效的action格式</p>
+        <pre className="mt-2 overflow-auto text-xs text-text-tertiary">
           {content}
         </pre>
       </div>
@@ -126,18 +128,18 @@ const ActionBlock = ({ content }: { content: string }) => {
 
   const getButtonIcon = () => {
     // 可以根据action类型返回不同图标
-    return <Target04 className="w-4 h-4" />
+    return <Target04 className="h-4 w-4" />
   }
 
   return (
-    <div className="p-4 bg-background-default-subtle border border-divider-subtle rounded-lg">
+    <div className="rounded-lg border border-divider-subtle bg-background-default-subtle p-4">
       <div className="flex flex-col gap-3">
         {actionData.description && (
           <p className="text-sm text-text-secondary">
             {actionData.description}
           </p>
         )}
-        
+
         <div className="flex items-center gap-2">
           <Button
             variant={getButtonVariant()}
@@ -152,10 +154,10 @@ const ActionBlock = ({ content }: { content: string }) => {
 
         {actionData.debug && (
           <details className="text-xs">
-            <summary className="text-text-tertiary cursor-pointer hover:text-text-secondary">
+            <summary className="cursor-pointer text-text-tertiary hover:text-text-secondary">
               查看数据
             </summary>
-            <pre className="mt-2 p-2 bg-background-default-subtle rounded text-text-tertiary overflow-auto">
+            <pre className="mt-2 overflow-auto rounded bg-background-default-subtle p-2 text-text-tertiary">
               {JSON.stringify(actionData.data, null, 2)}
             </pre>
           </details>

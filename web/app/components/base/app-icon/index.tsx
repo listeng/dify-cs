@@ -66,10 +66,10 @@ const AppIcon: FC<AppIconProps> = ({
   >
     {isValidImageIcon
       ? (
-        <img 
-          src={imageUrl!.startsWith('http') ? imageUrl : `${basePath}${imageUrl}`} 
-          className="h-full w-full" 
-          alt="app icon" 
+        <img
+          src={imageUrl!.startsWith('http') ? imageUrl : `${basePath}${imageUrl}`}
+          className="h-full w-full"
+          alt="app icon"
         />
       )
       : (innerIcon || ((icon && icon !== '') ? <em-emoji id={icon} /> : <em-emoji id='🤖' />))

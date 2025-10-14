@@ -108,9 +108,12 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
   const appId = useMemo(() => appData?.app_id, [appData])
 
   const [userId, setUserId] = useState<string>()
+  const [systemVariables, setSystemVariables] = useState<Record<string, any>>({})
   useEffect(() => {
-    getProcessedSystemVariablesFromUrlParams().then(({ user_id }) => {
+    getProcessedSystemVariablesFromUrlParams().then((vars) => {
+      const { user_id, conversation_id, ...otherVars } = vars
       setUserId(user_id)
+      setSystemVariables(otherVars)
     })
   }, [])
 
@@ -277,8 +280,6 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
     handleNewConversationInputsChange(conversationInputs)
   }, [handleNewConversationInputsChange, inputsForms])
 
-
-
   const { data: newConversation } = useSWR(newConversationId ? [isInstalledApp, appId, newConversationId] : null, () => generationConversationName(isInstalledApp, appId, newConversationId), { revalidateOnFocus: false })
   const [originConversationList, setOriginConversationList] = useState<ConversationItem[]>([])
   useEffect(() => {
@@ -391,7 +392,7 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
             // 对话开始后的回调，这里可以添加额外的逻辑
           })
         }, 500)
-        
+
         return () => clearTimeout(timer)
       }
     }
@@ -556,5 +557,6 @@ export const useChatWithHistory = (installedAppInfo?: InstalledApp) => {
     setCurrentConversationInputs,
     allInputsHidden,
     initUserVariables,
+    systemVariables,
   }
 }

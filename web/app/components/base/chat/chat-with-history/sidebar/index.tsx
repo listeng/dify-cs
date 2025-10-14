@@ -44,6 +44,7 @@ const Sidebar = ({ isPanel }: Props) => {
     handleSidebarCollapse,
     isMobile,
     isResponding,
+    systemVariables,
   } = useChatWithHistoryContext()
   const isSidebarCollapsed = sidebarCollapseState
   const systemFeatures = useGlobalPublicStore(s => s.systemFeatures)
@@ -140,22 +141,35 @@ const Sidebar = ({ isPanel }: Props) => {
       <div className='flex shrink-0 items-center justify-between p-3'>
         <MenuDropdown hideLogout={isInstalledApp} placement='top-start' data={appData?.site} />
         {/* powered by */}
-        <div className='shrink-0'>
-          {!appData?.custom_config?.remove_webapp_brand && (
-            <div className={cn(
-              'flex shrink-0 items-center gap-1.5 px-1',
-            )}>
-              <div className='system-2xs-medium-uppercase text-text-tertiary'>{t('share.chat.poweredBy')}</div>
-              {
-                systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo
-                  ? <img src={systemFeatures.branding.workspace_logo} alt='logo' className='block h-5 w-auto' />
-                  : appData?.custom_config?.replace_webapp_logo
-                    ? <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt='logo' className='block h-5 w-auto' />
-                    : <DifyLogo size='small' />
-              }
+        {(() => {
+          const copyrightParam = systemVariables?.copyright
+          if (copyrightParam === '0')
+            return null
+
+          return (
+            <div className='shrink-0'>
+              {!appData?.custom_config?.remove_webapp_brand && (
+                <div className={cn(
+                  'flex shrink-0 items-center gap-1.5 px-1',
+                )}>
+                  <div className='system-2xs-medium-uppercase text-text-tertiary'>{t('share.chat.poweredBy')}</div>
+                  {(() => {
+                    if (copyrightParam && copyrightParam !== '0')
+                      return <span className='system-2xs-medium text-text-tertiary'>{copyrightParam}</span>
+
+                    if (systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo)
+                      return <img src={systemFeatures.branding.workspace_logo} alt='logo' className='block h-5 w-auto' />
+
+                    if (appData?.custom_config?.replace_webapp_logo)
+                      return <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt='logo' className='block h-5 w-auto' />
+
+                    return <DifyLogo size='small' />
+                  })()}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          )
+        })()}
         {!!showConfirm && (
           <Confirm
             title={t('share.chat.deleteConversation.title')}

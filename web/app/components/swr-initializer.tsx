@@ -4,7 +4,7 @@ import { SWRConfig } from 'swr'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { getRoutePath, INSTALL, SIGNIN } from '@/utils/route-utils'
+import { INSTALL, SIGNIN, getRoutePath } from '@/utils/route-utils'
 import { fetchSetupStatus } from '@/service/common'
 import {
   EDUCATION_VERIFYING_LOCALSTORAGE_ITEM,

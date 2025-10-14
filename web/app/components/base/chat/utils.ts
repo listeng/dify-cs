@@ -2,7 +2,15 @@ import { UUID_NIL } from './constants'
 import type { IChatItem } from './chat/type'
 import type { ChatItem, ChatItemInTree } from './types'
 
-async function decodeBase64AndDecompress(base64String: string) {
+async function decodeBase64AndDecompress(rawString: string) {
+  const base64String = rawString ?? ''
+  const isLikelyBase64 = base64String.length > 0
+    && base64String.length % 4 === 0
+    && /^[A-Za-z0-9+/=]+$/.test(base64String)
+
+  if (!isLikelyBase64)
+    return base64String
+
   try {
     const binaryString = atob(base64String)
     const compressedUint8Array = Uint8Array.from(binaryString, char => char.charCodeAt(0))
@@ -11,7 +19,12 @@ async function decodeBase64AndDecompress(base64String: string) {
     return new TextDecoder().decode(decompressedArrayBuffer)
   }
   catch {
-    return undefined
+    try {
+      return atob(base64String)
+    }
+    catch {
+      return base64String
+    }
   }
 }
 
@@ -48,9 +61,22 @@ async function getProcessedSystemVariablesFromUrlParams(): Promise<Record<string
   await Promise.all(
     entriesArray.map(async ([key, value]) => {
       if (key.startsWith('sys.'))
-        systemVariables[key.slice(4)] = await decodeBase64AndDecompress(decodeURIComponent(value))
+        systemVariables[key.slice(4)] = await decodeBase64AndDecompress(value)
     }),
   )
+  entriesArray.forEach(([key, value]) => {
+    if (key.startsWith('sys.'))
+      return
+
+    const decodedValue = value ?? ''
+    if (
+      !Object.prototype.hasOwnProperty.call(systemVariables, key)
+      || systemVariables[key] === undefined
+      || systemVariables[key] === null
+      || systemVariables[key] === ''
+    )
+      systemVariables[key] = decodedValue
+  })
   return systemVariables
 }
 

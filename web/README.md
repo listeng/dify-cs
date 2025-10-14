@@ -116,3 +116,9 @@ Visit <https://docs.dify.ai/getting-started/readme> to view the full documentati
 ## Community
 
 The Dify community can be found on [Discord community](https://discord.gg/5AEfbxcd9k), where you can ask questions, voice ideas, and share your projects.
+
+
+## Build
+
+docker build -t hub.gxdnr.local/langgenius/dify-web:1.7.1-cs10 .
+docker push hub.gxdnr.local/langgenius/dify-web:1.7.1-cs10

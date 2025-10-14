@@ -40,6 +40,7 @@ const capitalizationLanguageNameMap: Record<string, string> = {
   svg: 'SVG',
   abc: 'ABC',
   action: 'Action',
+  data: 'Data',
 }
 const getCorrectCapitalizationLanguageName = (language: string) => {
   if (!language)
@@ -80,6 +81,7 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
   const [isSVG, setIsSVG] = useState(true)
   const [chartState, setChartState] = useState<'loading' | 'success' | 'error'>('loading')
   const [finalChartOption, setFinalChartOption] = useState<any>(null)
+  const [isDataExpanded, setIsDataExpanded] = useState(false)
   const echartsRef = useRef<any>(null)
   const contentRef = useRef<string>('')
   const processedRef = useRef<boolean>(false) // Track if content was successfully processed
@@ -272,6 +274,48 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
   const renderCodeContent = useMemo(() => {
     const content = String(children).replace(/\n$/, '')
     switch (language) {
+      case 'data': {
+        // Data blocks are collapsed by default
+        const lineCount = content.split('\n').length
+        const charCount = content.length
+        return (
+          <div style={{
+            borderBottomLeftRadius: '10px',
+            borderBottomRightRadius: '10px',
+            backgroundColor: 'var(--color-components-input-bg-normal)',
+            overflow: 'hidden',
+          }}>
+            {!isDataExpanded && (
+              <div style={{
+                padding: '12px',
+                color: 'var(--color-text-secondary)',
+                fontSize: '13px',
+                fontFamily: 'var(--font-family)',
+              }}>
+                -
+              </div>
+            )}
+            {isDataExpanded && (
+              <SyntaxHighlighter
+                {...props}
+                style={theme === Theme.light ? atelierHeathLight : atelierHeathDark}
+                customStyle={{
+                  paddingLeft: 12,
+                  borderBottomLeftRadius: '10px',
+                  borderBottomRightRadius: '10px',
+                  backgroundColor: 'var(--color-components-input-bg-normal)',
+                  margin: 0,
+                }}
+                language="text"
+                showLineNumbers
+                PreTag="div"
+              >
+                {content}
+              </SyntaxHighlighter>
+            )}
+          </div>
+        )
+      }
       case 'mermaid':
         return <Flowchart PrimitiveCode={content} theme={theme as 'light' | 'dark'} />
       case 'echarts': {
@@ -424,7 +468,7 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
           </SyntaxHighlighter>
         )
     }
-  }, [children, language, isSVG, finalChartOption, props, theme, match, chartState, isDarkMode, echartsStyle, echartsOpts, handleChartReady, echartsEvents])
+  }, [children, language, isSVG, finalChartOption, props, theme, match, chartState, isDarkMode, echartsStyle, echartsOpts, handleChartReady, echartsEvents, isDataExpanded])
 
   if (inline || !match)
     return <code {...props} className={className}>{children}</code>
@@ -434,6 +478,17 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
       <div className='flex h-8 items-center justify-between rounded-t-[10px] border-b border-divider-subtle bg-components-input-bg-normal p-1 pl-3'>
         <div className='system-xs-semibold-uppercase text-text-secondary'>{languageShowName}</div>
         <div className='flex items-center gap-1'>
+          {language === 'data' && (
+            <ActionButton onClick={() => setIsDataExpanded(!isDataExpanded)}>
+              <svg className='h-4 w-4' viewBox='0 0 16 16' fill='currentColor'>
+                {isDataExpanded ? (
+                  <path d='M8 4.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5z' />
+                ) : (
+                  <path d='M8 4.5a.5.5 0 0 1 .5.5v2.5H11a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V8.5H5a.5.5 0 0 1 0-1h2.5V5a.5.5 0 0 1 .5-.5z' />
+                )}
+              </svg>
+            </ActionButton>
+          )}
           {language === 'svg' && <SVGBtn isSVG={isSVG} setIsSVG={setIsSVG} />}
           <ActionButton>
             <CopyIcon content={String(children).replace(/\n$/, '')} />
