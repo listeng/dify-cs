@@ -8,23 +8,25 @@ from yarl import URL
 from configs.app_config import DifyConfig
 
 
-def test_dify_config(monkeypatch):
+def test_dify_config(monkeypatch: pytest.MonkeyPatch):
     # clear system environment variables
     os.environ.clear()
 
     # Set environment variables using monkeypatch
     monkeypatch.setenv("CONSOLE_API_URL", "https://example.com")
     monkeypatch.setenv("CONSOLE_WEB_URL", "https://example.com")
-    monkeypatch.setenv("HTTP_REQUEST_MAX_WRITE_TIMEOUT", "30")
+    monkeypatch.setenv("HTTP_REQUEST_MAX_WRITE_TIMEOUT", "30")  # Custom value for testing
+    monkeypatch.setenv("DB_TYPE", "postgresql")
     monkeypatch.setenv("DB_USERNAME", "postgres")
     monkeypatch.setenv("DB_PASSWORD", "postgres")
     monkeypatch.setenv("DB_HOST", "localhost")
     monkeypatch.setenv("DB_PORT", "5432")
     monkeypatch.setenv("DB_DATABASE", "dify")
-    monkeypatch.setenv("HTTP_REQUEST_MAX_READ_TIMEOUT", "600")
+    monkeypatch.setenv("HTTP_REQUEST_MAX_READ_TIMEOUT", "300")  # Custom value for testing
 
     # load dotenv file with pydantic-settings
-    config = DifyConfig()
+    # Disable `.env` loading to ensure test stability across environments
+    config = DifyConfig(_env_file=None)
 
     # constant values
     assert config.COMMIT_SHA == ""
@@ -33,22 +35,43 @@ def test_dify_config(monkeypatch):
     assert config.EDITION == "SELF_HOSTED"
     assert config.API_COMPRESSION_ENABLED is False
     assert config.SENTRY_TRACES_SAMPLE_RATE == 1.0
+    assert config.TEMPLATE_TRANSFORM_MAX_LENGTH == 400_000
 
-    # annotated field with default value
-    assert config.HTTP_REQUEST_MAX_READ_TIMEOUT == 600
+    # annotated field with custom configured value
+    assert config.HTTP_REQUEST_MAX_READ_TIMEOUT == 300
 
-    # annotated field with configured value
+    # annotated field with custom configured value
     assert config.HTTP_REQUEST_MAX_WRITE_TIMEOUT == 30
-
-    assert config.WORKFLOW_PARALLEL_DEPTH_LIMIT == 3
 
     # values from pyproject.toml
     assert Version(config.project.version) >= Version("1.0.0")
 
 
+def test_http_timeout_defaults(monkeypatch: pytest.MonkeyPatch):
+    """Test that HTTP timeout defaults are correctly set"""
+    # clear system environment variables
+    os.environ.clear()
+
+    # Set minimal required env vars
+    monkeypatch.setenv("DB_TYPE", "postgresql")
+    monkeypatch.setenv("DB_USERNAME", "postgres")
+    monkeypatch.setenv("DB_PASSWORD", "postgres")
+    monkeypatch.setenv("DB_HOST", "localhost")
+    monkeypatch.setenv("DB_PORT", "5432")
+    monkeypatch.setenv("DB_DATABASE", "dify")
+
+    # Disable `.env` loading to ensure test stability across environments
+    config = DifyConfig(_env_file=None)
+
+    # Verify default timeout values
+    assert config.HTTP_REQUEST_MAX_CONNECT_TIMEOUT == 10
+    assert config.HTTP_REQUEST_MAX_READ_TIMEOUT == 600
+    assert config.HTTP_REQUEST_MAX_WRITE_TIMEOUT == 600
+
+
 # NOTE: If there is a `.env` file in your Workspace, this test might not succeed as expected.
 # This is due to `pymilvus` loading all the variables from the `.env` file into `os.environ`.
-def test_flask_configs(monkeypatch):
+def test_flask_configs(monkeypatch: pytest.MonkeyPatch):
     flask_app = Flask("app")
     # clear system environment variables
     os.environ.clear()
@@ -56,7 +79,7 @@ def test_flask_configs(monkeypatch):
     # Set environment variables using monkeypatch
     monkeypatch.setenv("CONSOLE_API_URL", "https://example.com")
     monkeypatch.setenv("CONSOLE_WEB_URL", "https://example.com")
-    monkeypatch.setenv("HTTP_REQUEST_MAX_WRITE_TIMEOUT", "30")
+    monkeypatch.setenv("DB_TYPE", "postgresql")
     monkeypatch.setenv("DB_USERNAME", "postgres")
     monkeypatch.setenv("DB_PASSWORD", "postgres")
     monkeypatch.setenv("DB_HOST", "localhost")
@@ -65,7 +88,8 @@ def test_flask_configs(monkeypatch):
     monkeypatch.setenv("WEB_API_CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000,*")
     monkeypatch.setenv("CODE_EXECUTION_ENDPOINT", "http://127.0.0.1:8194/")
 
-    flask_app.config.from_mapping(DifyConfig().model_dump())  # pyright: ignore
+    # Disable `.env` loading to ensure test stability across environments
+    flask_app.config.from_mapping(DifyConfig(_env_file=None).model_dump())  # pyright: ignore
     config = flask_app.config
 
     # configs read from pydantic-settings
@@ -90,6 +114,8 @@ def test_flask_configs(monkeypatch):
         "pool_recycle": 3600,
         "pool_size": 30,
         "pool_use_lifo": False,
+        "pool_reset_on_return": None,
+        "pool_timeout": 30,
     }
 
     assert config["CONSOLE_WEB_URL"] == "https://example.com"
@@ -100,11 +126,11 @@ def test_flask_configs(monkeypatch):
     assert str(URL(str(config["CODE_EXECUTION_ENDPOINT"])) / "v1") == "http://127.0.0.1:8194/v1"
 
 
-def test_inner_api_config_exist(monkeypatch):
+def test_inner_api_config_exist(monkeypatch: pytest.MonkeyPatch):
     # Set environment variables using monkeypatch
     monkeypatch.setenv("CONSOLE_API_URL", "https://example.com")
     monkeypatch.setenv("CONSOLE_WEB_URL", "https://example.com")
-    monkeypatch.setenv("HTTP_REQUEST_MAX_WRITE_TIMEOUT", "30")
+    monkeypatch.setenv("DB_TYPE", "postgresql")
     monkeypatch.setenv("DB_USERNAME", "postgres")
     monkeypatch.setenv("DB_PASSWORD", "postgres")
     monkeypatch.setenv("DB_HOST", "localhost")
@@ -118,9 +144,10 @@ def test_inner_api_config_exist(monkeypatch):
     assert len(config.INNER_API_KEY) > 0
 
 
-def test_db_extras_options_merging(monkeypatch):
+def test_db_extras_options_merging(monkeypatch: pytest.MonkeyPatch):
     """Test that DB_EXTRAS options are properly merged with default timezone setting"""
     # Set environment variables
+    monkeypatch.setenv("DB_TYPE", "postgresql")
     monkeypatch.setenv("DB_USERNAME", "postgres")
     monkeypatch.setenv("DB_PASSWORD", "postgres")
     monkeypatch.setenv("DB_HOST", "localhost")
@@ -138,6 +165,62 @@ def test_db_extras_options_merging(monkeypatch):
     options = engine_options["connect_args"]["options"]
     assert "search_path=myschema" in options
     assert "timezone=UTC" in options
+
+
+def test_pubsub_redis_url_default(monkeypatch: pytest.MonkeyPatch):
+    os.environ.clear()
+
+    monkeypatch.setenv("CONSOLE_API_URL", "https://example.com")
+    monkeypatch.setenv("CONSOLE_WEB_URL", "https://example.com")
+    monkeypatch.setenv("DB_USERNAME", "postgres")
+    monkeypatch.setenv("DB_PASSWORD", "postgres")
+    monkeypatch.setenv("DB_HOST", "localhost")
+    monkeypatch.setenv("DB_PORT", "5432")
+    monkeypatch.setenv("DB_DATABASE", "dify")
+    monkeypatch.setenv("REDIS_HOST", "redis.example.com")
+    monkeypatch.setenv("REDIS_PORT", "6380")
+    monkeypatch.setenv("REDIS_USERNAME", "user")
+    monkeypatch.setenv("REDIS_PASSWORD", "pass@word")
+    monkeypatch.setenv("REDIS_DB", "2")
+    monkeypatch.setenv("REDIS_USE_SSL", "true")
+
+    config = DifyConfig()
+
+    assert config.normalized_pubsub_redis_url == "rediss://user:pass%40word@redis.example.com:6380/2"
+    assert config.PUBSUB_REDIS_CHANNEL_TYPE == "pubsub"
+
+
+def test_pubsub_redis_url_override(monkeypatch: pytest.MonkeyPatch):
+    os.environ.clear()
+
+    monkeypatch.setenv("CONSOLE_API_URL", "https://example.com")
+    monkeypatch.setenv("CONSOLE_WEB_URL", "https://example.com")
+    monkeypatch.setenv("DB_USERNAME", "postgres")
+    monkeypatch.setenv("DB_PASSWORD", "postgres")
+    monkeypatch.setenv("DB_HOST", "localhost")
+    monkeypatch.setenv("DB_PORT", "5432")
+    monkeypatch.setenv("DB_DATABASE", "dify")
+    monkeypatch.setenv("PUBSUB_REDIS_URL", "redis://pubsub-host:6381/5")
+
+    config = DifyConfig()
+
+    assert config.normalized_pubsub_redis_url == "redis://pubsub-host:6381/5"
+
+
+def test_pubsub_redis_url_required_when_default_unavailable(monkeypatch: pytest.MonkeyPatch):
+    os.environ.clear()
+
+    monkeypatch.setenv("CONSOLE_API_URL", "https://example.com")
+    monkeypatch.setenv("CONSOLE_WEB_URL", "https://example.com")
+    monkeypatch.setenv("DB_USERNAME", "postgres")
+    monkeypatch.setenv("DB_PASSWORD", "postgres")
+    monkeypatch.setenv("DB_HOST", "localhost")
+    monkeypatch.setenv("DB_PORT", "5432")
+    monkeypatch.setenv("DB_DATABASE", "dify")
+    monkeypatch.setenv("REDIS_HOST", "")
+
+    with pytest.raises(ValueError, match="PUBSUB_REDIS_URL must be set"):
+        _ = DifyConfig().normalized_pubsub_redis_url
 
 
 @pytest.mark.parametrize(
@@ -163,7 +246,13 @@ def test_db_extras_options_merging(monkeypatch):
     ],
 )
 def test_celery_broker_url_with_special_chars_password(
-    monkeypatch, broker_url, expected_host, expected_port, expected_username, expected_password, expected_db
+    monkeypatch: pytest.MonkeyPatch,
+    broker_url,
+    expected_host,
+    expected_port,
+    expected_username,
+    expected_password,
+    expected_db,
 ):
     """Test that CELERY_BROKER_URL with various formats are handled correctly."""
     from kombu.utils.url import parse_url
@@ -174,6 +263,7 @@ def test_celery_broker_url_with_special_chars_password(
     # Set up basic required environment variables (following existing pattern)
     monkeypatch.setenv("CONSOLE_API_URL", "https://example.com")
     monkeypatch.setenv("CONSOLE_WEB_URL", "https://example.com")
+    monkeypatch.setenv("DB_TYPE", "postgresql")
     monkeypatch.setenv("DB_USERNAME", "postgres")
     monkeypatch.setenv("DB_PASSWORD", "postgres")
     monkeypatch.setenv("DB_HOST", "localhost")

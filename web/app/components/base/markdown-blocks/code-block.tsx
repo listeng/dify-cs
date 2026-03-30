@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactEcharts from 'echarts-for-react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SyntaxHighlighter from 'react-syntax-highlighter'
 import {
   atelierHeathDark,
@@ -7,14 +7,16 @@ import {
 } from 'react-syntax-highlighter/dist/esm/styles/hljs'
 import ActionButton from '@/app/components/base/action-button'
 import CopyIcon from '@/app/components/base/copy-icon'
-import SVGBtn from '@/app/components/base/svg'
-import Flowchart from '@/app/components/base/mermaid'
-import { Theme } from '@/types/app'
-import useTheme from '@/hooks/use-theme'
-import SVGRenderer from '../svg-gallery' // Assumes svg-gallery.tsx is in /base directory
-import MarkdownMusic from '@/app/components/base/markdown-blocks/music'
 import ActionBlock from '@/app/components/base/markdown-blocks/action-block'
+import MarkdownMusic from '@/app/components/base/markdown-blocks/music'
 import ErrorBoundary from '@/app/components/base/markdown/error-boundary'
+import SVGBtn from '@/app/components/base/svg'
+import useTheme from '@/hooks/use-theme'
+import dynamic from '@/next/dynamic'
+import { Theme } from '@/types/app'
+import SVGRenderer from '../svg-gallery' // Assumes svg-gallery.tsx is in /base directory
+
+const Flowchart = dynamic(() => import('@/app/components/base/mermaid'), { ssr: false })
 
 // Available language https://github.com/react-syntax-highlighter/react-syntax-highlighter/blob/master/AVAILABLE_LANGUAGES_HLJS.MD
 const capitalizationLanguageNameMap: Record<string, string> = {
@@ -67,33 +69,49 @@ const getCorrectCapitalizationLanguageName = (language: string) => {
 
 // Define ECharts event parameter types
 type EChartsEventParams = {
-  type: string;
-  seriesIndex?: number;
-  dataIndex?: number;
-  name?: string;
-  value?: any;
-  currentIndex?: number; // Added for timeline events
-  [key: string]: any;
+  type: string
+  seriesIndex?: number
+  dataIndex?: number
+  name?: string
+  value?: any
+  currentIndex?: number // Added for timeline events
+  [key: string]: any
 }
 
 const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any) => {
   const { theme } = useTheme()
   const [isSVG, setIsSVG] = useState(true)
+  const [isDataExpanded, setIsDataExpanded] = useState(false)
   const [chartState, setChartState] = useState<'loading' | 'success' | 'error'>('loading')
   const [finalChartOption, setFinalChartOption] = useState<any>(null)
-  const [isDataExpanded, setIsDataExpanded] = useState(false)
   const echartsRef = useRef<any>(null)
   const contentRef = useRef<string>('')
   const processedRef = useRef<boolean>(false) // Track if content was successfully processed
-  const instanceIdRef = useRef<string>(`chart-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`) // Unique ID for logging
   const isInitialRenderRef = useRef<boolean>(true) // Track if this is initial render
   const chartInstanceRef = useRef<any>(null) // Direct reference to ECharts instance
-  const resizeTimerRef = useRef<NodeJS.Timeout | null>(null) // For debounce handling
+  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null) // For debounce handling
+  const chartReadyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const finishedEventCountRef = useRef<number>(0) // Track finished event trigger count
   const match = /language-(\w+)/.exec(className || '')
   const language = match?.[1]
   const languageShowName = getCorrectCapitalizationLanguageName(language || '')
   const isDarkMode = theme === Theme.dark
+
+  const clearResizeTimer = useCallback(() => {
+    if (!resizeTimerRef.current)
+      return
+
+    clearTimeout(resizeTimerRef.current)
+    resizeTimerRef.current = null
+  }, [])
+
+  const clearChartReadyTimer = useCallback(() => {
+    if (!chartReadyTimerRef.current)
+      return
+
+    clearTimeout(chartReadyTimerRef.current)
+    chartReadyTimerRef.current = null
+  }, [])
 
   const echartsStyle = useMemo(() => ({
     height: '350px',
@@ -107,30 +125,31 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
 
   // Debounce resize operations
   const debouncedResize = useCallback(() => {
-    if (resizeTimerRef.current)
-      clearTimeout(resizeTimerRef.current)
+    clearResizeTimer()
 
     resizeTimerRef.current = setTimeout(() => {
       if (chartInstanceRef.current)
         chartInstanceRef.current.resize()
       resizeTimerRef.current = null
     }, 200)
-  }, [])
+  }, [clearResizeTimer])
 
   // Handle ECharts instance initialization
   const handleChartReady = useCallback((instance: any) => {
     chartInstanceRef.current = instance
 
     // Force resize to ensure timeline displays correctly
-    setTimeout(() => {
+    clearChartReadyTimer()
+    chartReadyTimerRef.current = setTimeout(() => {
       if (chartInstanceRef.current)
         chartInstanceRef.current.resize()
+      chartReadyTimerRef.current = null
     }, 200)
-  }, [])
+  }, [clearChartReadyTimer])
 
   // Store event handlers in useMemo to avoid recreating them
   const echartsEvents = useMemo(() => ({
-    finished: (params: EChartsEventParams) => {
+    finished: (_params: EChartsEventParams) => {
       // Limit finished event frequency to avoid infinite loops
       finishedEventCountRef.current++
       if (finishedEventCountRef.current > 3) {
@@ -147,7 +166,8 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
 
   // Handle container resize for echarts
   useEffect(() => {
-    if (language !== 'echarts' || !chartInstanceRef.current) return
+    if (language !== 'echarts' || !chartInstanceRef.current)
+      return
 
     const handleResize = () => {
       if (chartInstanceRef.current)
@@ -159,14 +179,25 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
 
     return () => {
       window.removeEventListener('resize', handleResize)
-      if (resizeTimerRef.current)
-        clearTimeout(resizeTimerRef.current)
+      clearResizeTimer()
+      clearChartReadyTimer()
+      chartInstanceRef.current = null
     }
-  }, [language, debouncedResize])
+  }, [language, debouncedResize, clearResizeTimer, clearChartReadyTimer])
+
+  useEffect(() => {
+    return () => {
+      clearResizeTimer()
+      clearChartReadyTimer()
+      chartInstanceRef.current = null
+      echartsRef.current = null
+    }
+  }, [clearResizeTimer, clearChartReadyTimer])
   // Process chart data when content changes
   useEffect(() => {
     // Only process echarts content
-    if (language !== 'echarts') return
+    if (language !== 'echarts')
+      return
 
     // Reset state when new content is detected
     if (!contentRef.current) {
@@ -177,11 +208,13 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
     const newContent = String(children).replace(/\n$/, '')
 
     // Skip if content hasn't changed
-    if (contentRef.current === newContent) return
+    if (contentRef.current === newContent)
+      return
     contentRef.current = newContent
 
     const trimmedContent = newContent.trim()
-    if (!trimmedContent) return
+    if (!trimmedContent)
+      return
 
     // Detect if this is historical data (already complete)
     // Historical data typically comes as a complete code block with complete JSON
@@ -203,23 +236,10 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
         }
       }
       catch {
-        try {
-          // eslint-disable-next-line no-new-func, sonarjs/code-eval
-          const result = new Function(`return ${trimmedContent}`)()
-          if (typeof result === 'object' && result !== null) {
-            setFinalChartOption(result)
-            setChartState('success')
-            processedRef.current = true
-            return
-          }
-        }
-        catch {
-          // If we have a complete JSON structure but it doesn't parse,
-          // it's likely an error rather than incomplete data
-          setChartState('error')
-          processedRef.current = true
-          return
-        }
+        // Avoid executing arbitrary code; require valid JSON for chart options.
+        setChartState('error')
+        processedRef.current = true
+        return
       }
     }
 
@@ -227,14 +247,14 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
     // Check more conditions for streaming data
     const isIncomplete
       = trimmedContent.length < 5
-      || (trimmedContent.startsWith('{')
-        && (!trimmedContent.endsWith('}')
-          || trimmedContent.split('{').length !== trimmedContent.split('}').length))
-      || (trimmedContent.startsWith('[')
-        && (!trimmedContent.endsWith(']')
-          || trimmedContent.split('[').length !== trimmedContent.split('}').length))
-      || (trimmedContent.split('"').length % 2 !== 1)
-      || (trimmedContent.includes('{"') && !trimmedContent.includes('"}'))
+        || (trimmedContent.startsWith('{')
+          && (!trimmedContent.endsWith('}')
+            || trimmedContent.split('{').length !== trimmedContent.split('}').length))
+          || (trimmedContent.startsWith('[')
+            && (!trimmedContent.endsWith(']')
+              || trimmedContent.split('[').length !== trimmedContent.split('}').length))
+            || (trimmedContent.split('"').length % 2 !== 1)
+            || (trimmedContent.includes('{"') && !trimmedContent.includes('"}'))
 
     // Only try to parse streaming data if it looks complete and hasn't been processed
     if (!isIncomplete && !processedRef.current) {
@@ -248,19 +268,9 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
         }
       }
       catch {
-        try {
-          // eslint-disable-next-line no-new-func, sonarjs/code-eval
-          const result = new Function(`return ${trimmedContent}`)()
-          if (typeof result === 'object' && result !== null) {
-            setFinalChartOption(result)
-            isValidOption = true
-          }
-        }
-        catch {
-          // Both parsing methods failed, but content looks complete
-          setChartState('error')
-          processedRef.current = true
-        }
+        // Only accept JSON to avoid executing arbitrary code from the message.
+        setChartState('error')
+        processedRef.current = true
       }
 
       if (isValidOption) {
@@ -274,25 +284,24 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
   const renderCodeContent = useMemo(() => {
     const content = String(children).replace(/\n$/, '')
     switch (language) {
-      case 'data': {
-        // Data blocks are collapsed by default
-        const lineCount = content.split('\n').length
-        const charCount = content.length
+      case 'data':
         return (
           <div style={{
             borderBottomLeftRadius: '10px',
             borderBottomRightRadius: '10px',
             backgroundColor: 'var(--color-components-input-bg-normal)',
             overflow: 'hidden',
-          }}>
+          }}
+          >
             {!isDataExpanded && (
               <div style={{
                 padding: '12px',
                 color: 'var(--color-text-secondary)',
                 fontSize: '13px',
                 fontFamily: 'var(--font-family)',
-              }}>
-                -
+              }}
+              >
+                Structured data hidden. Expand to view payload.
               </div>
             )}
             {isDataExpanded && (
@@ -315,7 +324,6 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
             )}
           </div>
         )
-      }
       case 'mermaid':
         return <Flowchart PrimitiveCode={content} theme={theme as 'light' | 'dark'} />
       case 'echarts': {
@@ -333,12 +341,14 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
               borderBottomRightRadius: '10px',
               backgroundColor: isDarkMode ? 'var(--color-components-input-bg-normal)' : 'transparent',
               color: 'var(--color-text-secondary)',
-            }}>
+            }}
+            >
               <div style={{
                 marginBottom: '12px',
                 width: '24px',
                 height: '24px',
-              }}>
+              }}
+              >
                 {/* Rotating spinner that works in both light and dark modes */}
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ animation: 'spin 1.5s linear infinite' }}>
                   <style>
@@ -356,7 +366,10 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
               <div style={{
                 fontFamily: 'var(--font-family)',
                 fontSize: '14px',
-              }}>Chart loading...</div>
+              }}
+              >
+                Chart loading...
+              </div>
             </div>
           )
         }
@@ -375,7 +388,8 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
               borderBottomLeftRadius: '10px',
               borderBottomRightRadius: '10px',
               transition: 'background-color 0.3s ease',
-            }}>
+            }}
+            >
               <ErrorBoundary>
                 <ReactEcharts
                   ref={(e) => {
@@ -414,7 +428,8 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
             borderBottomLeftRadius: '10px',
             borderBottomRightRadius: '10px',
             transition: 'background-color 0.3s ease',
-          }}>
+          }}
+          >
             <ErrorBoundary>
               <ReactEcharts
                 ref={echartsRef}
@@ -468,24 +483,22 @@ const CodeBlock: any = memo(({ inline, className, children = '', ...props }: any
           </SyntaxHighlighter>
         )
     }
-  }, [children, language, isSVG, finalChartOption, props, theme, match, chartState, isDarkMode, echartsStyle, echartsOpts, handleChartReady, echartsEvents, isDataExpanded])
+  }, [children, language, isSVG, isDataExpanded, finalChartOption, props, theme, match, chartState, isDarkMode, echartsStyle, echartsOpts, handleChartReady, echartsEvents])
 
   if (inline || !match)
     return <code {...props} className={className}>{children}</code>
 
   return (
-    <div className='relative'>
-      <div className='flex h-8 items-center justify-between rounded-t-[10px] border-b border-divider-subtle bg-components-input-bg-normal p-1 pl-3'>
-        <div className='system-xs-semibold-uppercase text-text-secondary'>{languageShowName}</div>
-        <div className='flex items-center gap-1'>
+    <div className="relative">
+      <div className="flex h-8 items-center justify-between rounded-t-[10px] border-b border-divider-subtle bg-components-input-bg-normal p-1 pl-3">
+        <div className="text-text-secondary system-xs-semibold-uppercase">{languageShowName}</div>
+        <div className="flex items-center gap-1">
           {language === 'data' && (
-            <ActionButton onClick={() => setIsDataExpanded(!isDataExpanded)}>
-              <svg className='h-4 w-4' viewBox='0 0 16 16' fill='currentColor'>
-                {isDataExpanded ? (
-                  <path d='M8 4.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5z' />
-                ) : (
-                  <path d='M8 4.5a.5.5 0 0 1 .5.5v2.5H11a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V8.5H5a.5.5 0 0 1 0-1h2.5V5a.5.5 0 0 1 .5-.5z' />
-                )}
+            <ActionButton onClick={() => setIsDataExpanded(expanded => !expanded)}>
+              <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
+                {isDataExpanded
+                  ? <path d="M8 4.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5z" />
+                  : <path d="M8 4.5a.5.5 0 0 1 .5.5v2.5H11a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V8.5H5a.5.5 0 0 1 0-1h2.5V5a.5.5 0 0 1 .5-.5z" />}
               </svg>
             </ActionButton>
           )}

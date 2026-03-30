@@ -60,7 +60,7 @@ class TestAccountInitialization:
             return "success"
 
         # Act
-        with patch("controllers.console.wraps.current_user", mock_user):
+        with patch("controllers.console.wraps.current_account_with_tenant", return_value=(mock_user, "tenant123")):
             result = protected_view()
 
         # Assert
@@ -77,7 +77,7 @@ class TestAccountInitialization:
             return "success"
 
         # Act & Assert
-        with patch("controllers.console.wraps.current_user", mock_user):
+        with patch("controllers.console.wraps.current_account_with_tenant", return_value=(mock_user, "tenant123")):
             with pytest.raises(AccountNotInitializedError):
                 protected_view()
 
@@ -163,7 +163,9 @@ class TestBillingResourceLimits:
             return "member_added"
 
         # Act
-        with patch("controllers.console.wraps.current_user"):
+        with patch(
+            "controllers.console.wraps.current_account_with_tenant", return_value=(MockUser("test_user"), "tenant123")
+        ):
             with patch("controllers.console.wraps.FeatureService.get_features", return_value=mock_features):
                 result = add_member()
 
@@ -185,7 +187,10 @@ class TestBillingResourceLimits:
 
         # Act & Assert
         with app.test_request_context():
-            with patch("controllers.console.wraps.current_user", MockUser("test_user")):
+            with patch(
+                "controllers.console.wraps.current_account_with_tenant",
+                return_value=(MockUser("test_user"), "tenant123"),
+            ):
                 with patch("controllers.console.wraps.FeatureService.get_features", return_value=mock_features):
                     with pytest.raises(Exception) as exc_info:
                         add_member()
@@ -207,7 +212,10 @@ class TestBillingResourceLimits:
 
         # Test 1: Should reject when source is datasets
         with app.test_request_context("/?source=datasets"):
-            with patch("controllers.console.wraps.current_user", MockUser("test_user")):
+            with patch(
+                "controllers.console.wraps.current_account_with_tenant",
+                return_value=(MockUser("test_user"), "tenant123"),
+            ):
                 with patch("controllers.console.wraps.FeatureService.get_features", return_value=mock_features):
                     with pytest.raises(Exception) as exc_info:
                         upload_document()
@@ -215,7 +223,10 @@ class TestBillingResourceLimits:
 
         # Test 2: Should allow when source is not datasets
         with app.test_request_context("/?source=other"):
-            with patch("controllers.console.wraps.current_user", MockUser("test_user")):
+            with patch(
+                "controllers.console.wraps.current_account_with_tenant",
+                return_value=(MockUser("test_user"), "tenant123"),
+            ):
                 with patch("controllers.console.wraps.FeatureService.get_features", return_value=mock_features):
                     result = upload_document()
                     assert result == "document_uploaded"
@@ -239,7 +250,9 @@ class TestRateLimiting:
             return "knowledge_success"
 
         # Act
-        with patch("controllers.console.wraps.current_user"):
+        with patch(
+            "controllers.console.wraps.current_account_with_tenant", return_value=(MockUser("test_user"), "tenant123")
+        ):
             with patch(
                 "controllers.console.wraps.FeatureService.get_knowledge_rate_limit", return_value=mock_rate_limit
             ):
@@ -271,7 +284,10 @@ class TestRateLimiting:
 
         # Act & Assert
         with app.test_request_context():
-            with patch("controllers.console.wraps.current_user", MockUser("test_user")):
+            with patch(
+                "controllers.console.wraps.current_account_with_tenant",
+                return_value=(MockUser("test_user"), "tenant123"),
+            ):
                 with patch(
                     "controllers.console.wraps.FeatureService.get_knowledge_rate_limit", return_value=mock_rate_limit
                 ):
@@ -312,7 +328,7 @@ class TestSystemSetup:
     def test_should_raise_not_init_validate_error_with_init_password(self, mock_environ_get, mock_db):
         """Test NotInitValidateError when INIT_PASSWORD is set but setup not complete"""
         # Arrange
-        mock_db.session.query.return_value.first.return_value = None  # No setup
+        mock_db.session.scalar.return_value = None  # No setup
         mock_environ_get.return_value = "some_password"
 
         @setup_required
@@ -329,7 +345,7 @@ class TestSystemSetup:
     def test_should_raise_not_setup_error_without_init_password(self, mock_environ_get, mock_db):
         """Test NotSetupError when no INIT_PASSWORD and setup not complete"""
         # Arrange
-        mock_db.session.query.return_value.first.return_value = None  # No setup
+        mock_db.session.scalar.return_value = None  # No setup
         mock_environ_get.return_value = None  # No INIT_PASSWORD
 
         @setup_required

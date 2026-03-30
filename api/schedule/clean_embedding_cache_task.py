@@ -2,8 +2,8 @@ import datetime
 import time
 
 import click
-from sqlalchemy import text
-from werkzeug.exceptions import NotFound
+from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 
 import app
 from configs import dify_config
@@ -19,16 +19,14 @@ def clean_embedding_cache_task():
     thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=clean_days)
     while True:
         try:
-            embedding_ids = (
-                db.session.query(Embedding.id)
+            embedding_ids = db.session.scalars(
+                select(Embedding.id)
                 .where(Embedding.created_at < thirty_days_ago)
                 .order_by(Embedding.created_at.desc())
                 .limit(100)
-                .all()
-            )
-            embedding_ids = [embedding_id[0] for embedding_id in embedding_ids]
-        except NotFound:
-            break
+            ).all()
+        except SQLAlchemyError:
+            raise
         if embedding_ids:
             for embedding_id in embedding_ids:
                 db.session.execute(

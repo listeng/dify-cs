@@ -30,41 +30,29 @@ export const getRoutePath = (
   path: string,
   params?: Record<string, string | number | boolean | null | undefined>,
 ): string => {
-  // 规范化 basePath：去掉首尾多余斜杠，保留中间部分
-  const base = (basePath || '').replace(/^\/+|\/+$/g, '') // e.g. 'dnrai' 或 ''
-  const normalizedBasePath = base ? `/${base}` : '' // e.g. '/dnrai' 或 ''
-
-  // 规范化 path：去掉开头的斜杠
+  const base = (basePath || '').replace(/^\/+|\/+$/g, '')
+  const normalizedBasePath = base ? `/${base}` : ''
   let normalizedPath = path.replace(/^\/+/, '')
 
-  // 如果 path 以 basePath 段开头（dnrai 或 dnrai/），去重
   if (base) {
     if (normalizedPath === base)
       normalizedPath = ''
-     else if (normalizedPath.startsWith(`${base}/`))
+    else if (normalizedPath.startsWith(`${base}/`))
       normalizedPath = normalizedPath.slice(base.length + 1)
   }
 
-  // 处理查询参数
   const queryString = params
-    ? `?${
-      new URLSearchParams(
+    ? new URLSearchParams(
         Object.entries(params)
-          .filter(([, value]) => value != null) // 过滤 null 和 undefined
-          .map(([key, value]) => [key, String(value)]), // 统一转为字符串
-      ).toString()}`
+          .filter(([, value]) => value != null)
+          .map(([key, value]) => [key, String(value)]),
+      ).toString()
     : ''
 
-  console.error(`normalizedPath -->>>${normalizedPath}`)
-  console.error(`queryString -->>>${queryString}`)
+  const pathname = `${normalizedBasePath}/${normalizedPath}`.replace(/\/+/g, '/')
+  const finalPathname = pathname === '/' ? pathname : pathname.replace(/\/+$/, '')
 
-  // 拼接并清理多余斜杠与末尾斜杠
-  const finalTargetPath = `${normalizedBasePath}/${normalizedPath}${queryString}`
-    .replace(/\/+/g, '/') // 合并重复 /
-    .replace(/([^:])\/+$/, '$1') // 移除末尾 /
-
-    console.error(`finalTargetPath -->>>${finalTargetPath}`)
-  return finalTargetPath
+  return queryString ? `${finalPathname}?${queryString}` : finalPathname
 }
 
 /**
@@ -164,21 +152,29 @@ export const getSigninPath = (
   redirectUrl: string = '',
   message?: string,
   code?: number,
+  extraParams?: Record<string, string | number | boolean | null | undefined>,
 ): string => {
-  const baseNoSlash = basePath.replace(/^\/+/, '')
+  const baseNoSlash = basePath.replace(/^\/+|\/+$/g, '')
 
   const stripBasePrefix = (url: string): string => {
-    if (!url) return url
+    if (!url || !baseNoSlash)
+      return url
+
     const trimmed = url.trim()
-    // 移除一次性前缀 '/dnrai' 或 'dnrai'，仅当后面是结束或 '/'
     const pattern = new RegExp(`^(?:/${baseNoSlash}|${baseNoSlash})(?=$|/)`)
     return trimmed.replace(pattern, '')
   }
 
-  const cleanedRedirect = stripBasePrefix(redirectUrl)
+  const params: Record<string, string | number | boolean | null | undefined> = {
+    ...(extraParams || {}),
+  }
+  const resolvedRedirect
+    = redirectUrl
+      || (typeof params.redirect_url === 'string' ? params.redirect_url : '')
 
-  const params: Record<string, string> = {}
+  delete params.redirect_url
 
+  const cleanedRedirect = stripBasePrefix(resolvedRedirect)
   if (cleanedRedirect)
     params.redirect_url = cleanedRedirect
 
@@ -186,7 +182,7 @@ export const getSigninPath = (
     params.message = message
 
   if (code !== undefined)
-    params.code = String(code)
+    params.code = code
 
   return getRoutePath('webapp-signin', params)
 }

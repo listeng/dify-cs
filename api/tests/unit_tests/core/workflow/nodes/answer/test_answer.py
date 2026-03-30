@@ -2,47 +2,45 @@ import time
 import uuid
 from unittest.mock import MagicMock
 
-from core.app.entities.app_invoke_entities import InvokeFrom
-from core.workflow.entities.variable_pool import VariablePool
-from core.workflow.entities.workflow_node_execution import WorkflowNodeExecutionStatus
-from core.workflow.graph_engine.entities.graph import Graph
-from core.workflow.graph_engine.entities.graph_init_params import GraphInitParams
-from core.workflow.graph_engine.entities.graph_runtime_state import GraphRuntimeState
-from core.workflow.nodes.answer.answer_node import AnswerNode
-from core.workflow.system_variable import SystemVariable
+from graphon.enums import WorkflowNodeExecutionStatus
+from graphon.graph import Graph
+from graphon.nodes.answer.answer_node import AnswerNode
+from graphon.runtime import GraphRuntimeState, VariablePool
+
+from core.app.entities.app_invoke_entities import InvokeFrom, UserFrom
+from core.workflow.node_factory import DifyNodeFactory
+from core.workflow.system_variables import build_system_variables
 from extensions.ext_database import db
-from models.enums import UserFrom
-from models.workflow import WorkflowType
+from tests.workflow_test_utils import build_test_graph_init_params
 
 
 def test_execute_answer():
     graph_config = {
         "edges": [
             {
-                "id": "start-source-llm-target",
+                "id": "start-source-answer-target",
                 "source": "start",
-                "target": "llm",
+                "target": "answer",
             },
         ],
         "nodes": [
-            {"data": {"type": "start"}, "id": "start"},
+            {"data": {"type": "start", "title": "Start"}, "id": "start"},
             {
                 "data": {
-                    "type": "llm",
+                    "title": "123",
+                    "type": "answer",
+                    "answer": "Today's weather is {{#start.weather#}}\n{{#llm.text#}}\n{{img}}\nFin.",
                 },
-                "id": "llm",
+                "id": "answer",
             },
         ],
     }
 
-    graph = Graph.init(graph_config=graph_config)
-
-    init_params = GraphInitParams(
-        tenant_id="1",
-        app_id="1",
-        workflow_type=WorkflowType.WORKFLOW,
+    init_params = build_test_graph_init_params(
         workflow_id="1",
         graph_config=graph_config,
+        tenant_id="1",
+        app_id="1",
         user_id="1",
         user_from=UserFrom.ACCOUNT,
         invoke_from=InvokeFrom.DEBUGGER,
@@ -50,13 +48,24 @@ def test_execute_answer():
     )
 
     # construct variable pool
-    pool = VariablePool(
-        system_variables=SystemVariable(user_id="aaa", files=[]),
+    variable_pool = VariablePool(
+        system_variables=build_system_variables(user_id="aaa", files=[]),
         user_inputs={},
         environment_variables=[],
+        conversation_variables=[],
     )
-    pool.add(["start", "weather"], "sunny")
-    pool.add(["llm", "text"], "You are a helpful AI.")
+    variable_pool.add(["start", "weather"], "sunny")
+    variable_pool.add(["llm", "text"], "You are a helpful AI.")
+
+    graph_runtime_state = GraphRuntimeState(variable_pool=variable_pool, start_at=time.perf_counter())
+
+    # create node factory
+    node_factory = DifyNodeFactory(
+        graph_init_params=init_params,
+        graph_runtime_state=graph_runtime_state,
+    )
+
+    graph = Graph.init(graph_config=graph_config, node_factory=node_factory, root_node_id="start")
 
     node_config = {
         "id": "answer",
@@ -70,13 +79,9 @@ def test_execute_answer():
     node = AnswerNode(
         id=str(uuid.uuid4()),
         graph_init_params=init_params,
-        graph=graph,
-        graph_runtime_state=GraphRuntimeState(variable_pool=pool, start_at=time.perf_counter()),
+        graph_runtime_state=graph_runtime_state,
         config=node_config,
     )
-
-    # Initialize node data
-    node.init_node_data(node_config["data"])
 
     # Mock db.session.close()
     db.session.close = MagicMock()

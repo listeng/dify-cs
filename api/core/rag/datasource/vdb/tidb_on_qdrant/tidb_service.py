@@ -1,13 +1,15 @@
 import time
 import uuid
+from collections.abc import Sequence
 
-import requests
-from requests.auth import HTTPDigestAuth
+import httpx
+from httpx import DigestAuth
 
 from configs import dify_config
 from extensions.ext_database import db
 from extensions.ext_redis import redis_client
 from models.dataset import TidbAuthBinding
+from models.enums import TidbAuthBindingStatus
 
 
 class TidbService:
@@ -48,7 +50,7 @@ class TidbService:
             "rootPassword": password,
         }
 
-        response = requests.post(f"{api_url}/clusters", json=cluster_data, auth=HTTPDigestAuth(public_key, private_key))
+        response = httpx.post(f"{api_url}/clusters", json=cluster_data, auth=DigestAuth(public_key, private_key))
 
         if response.status_code == 200:
             response_data = response.json()
@@ -82,7 +84,7 @@ class TidbService:
         :return: The response from the API.
         """
 
-        response = requests.delete(f"{api_url}/clusters/{cluster_id}", auth=HTTPDigestAuth(public_key, private_key))
+        response = httpx.delete(f"{api_url}/clusters/{cluster_id}", auth=DigestAuth(public_key, private_key))
 
         if response.status_code == 200:
             return response.json()
@@ -101,7 +103,7 @@ class TidbService:
         :return: The response from the API.
         """
 
-        response = requests.get(f"{api_url}/clusters/{cluster_id}", auth=HTTPDigestAuth(public_key, private_key))
+        response = httpx.get(f"{api_url}/clusters/{cluster_id}", auth=DigestAuth(public_key, private_key))
 
         if response.status_code == 200:
             return response.json()
@@ -126,10 +128,10 @@ class TidbService:
 
         body = {"password": new_password, "builtinRole": "role_admin", "customRoles": []}
 
-        response = requests.patch(
+        response = httpx.patch(
             f"{api_url}/clusters/{cluster_id}/sqlUsers/{account}",
             json=body,
-            auth=HTTPDigestAuth(public_key, private_key),
+            auth=DigestAuth(public_key, private_key),
         )
 
         if response.status_code == 200:
@@ -139,7 +141,7 @@ class TidbService:
 
     @staticmethod
     def batch_update_tidb_serverless_cluster_status(
-        tidb_serverless_list: list[TidbAuthBinding],
+        tidb_serverless_list: Sequence[TidbAuthBinding],
         project_id: str,
         api_url: str,
         iam_url: str,
@@ -160,9 +162,7 @@ class TidbService:
         tidb_serverless_list_map = {item.cluster_id: item for item in tidb_serverless_list}
         cluster_ids = [item.cluster_id for item in tidb_serverless_list]
         params = {"clusterIds": cluster_ids, "view": "BASIC"}
-        response = requests.get(
-            f"{api_url}/clusters:batchGet", params=params, auth=HTTPDigestAuth(public_key, private_key)
-        )
+        response = httpx.get(f"{api_url}/clusters:batchGet", params=params, auth=DigestAuth(public_key, private_key))
 
         if response.status_code == 200:
             response_data = response.json()
@@ -171,7 +171,7 @@ class TidbService:
                 userPrefix = item["userPrefix"]
                 if state == "ACTIVE" and len(userPrefix) > 0:
                     cluster_info = tidb_serverless_list_map[item["clusterId"]]
-                    cluster_info.status = "ACTIVE"
+                    cluster_info.status = TidbAuthBindingStatus.ACTIVE
                     cluster_info.account = f"{userPrefix}.root"
                     db.session.add(cluster_info)
             db.session.commit()
@@ -223,8 +223,8 @@ class TidbService:
             clusters.append(cluster_data)
 
         request_body = {"requests": clusters}
-        response = requests.post(
-            f"{api_url}/clusters:batchCreate", json=request_body, auth=HTTPDigestAuth(public_key, private_key)
+        response = httpx.post(
+            f"{api_url}/clusters:batchCreate", json=request_body, auth=DigestAuth(public_key, private_key)
         )
 
         if response.status_code == 200:

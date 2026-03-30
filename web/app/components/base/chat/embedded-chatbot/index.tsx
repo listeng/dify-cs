@@ -1,27 +1,29 @@
 'use client'
+import type { AppData } from '@/models/share'
 import {
   useEffect,
   useMemo,
   useRef,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import ChatWrapper from '@/app/components/base/chat/embedded-chatbot/chat-wrapper'
+import Header from '@/app/components/base/chat/embedded-chatbot/header'
+import Loading from '@/app/components/base/loading'
+import DifyLogo from '@/app/components/base/logo/dify-logo'
+import LogoHeader from '@/app/components/base/logo/logo-embedded-chat-header'
+import { useGlobalPublicStore } from '@/context/global-public-context'
+import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
+import useDocumentTitle from '@/hooks/use-document-title'
+import { AppSourceType } from '@/service/share'
+import { cn } from '@/utils/classnames'
 import {
   EmbeddedChatbotContext,
   useEmbeddedChatbotContext,
 } from './context'
 import { useEmbeddedChatbot } from './hooks'
-import { isDify } from './utils'
 import { useThemeContext } from './theme/theme-context'
 import { CssTransform } from './theme/utils'
-import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
-import Loading from '@/app/components/base/loading'
-import LogoHeader from '@/app/components/base/logo/logo-embedded-chat-header'
-import Header from '@/app/components/base/chat/embedded-chatbot/header'
-import ChatWrapper from '@/app/components/base/chat/embedded-chatbot/chat-wrapper'
-import DifyLogo from '@/app/components/base/logo/dify-logo'
-import cn from '@/utils/classnames'
-import useDocumentTitle from '@/hooks/use-document-title'
-import { useGlobalPublicStore } from '@/context/global-public-context'
+import { isDify } from './utils'
 
 const Chatbot = () => {
   const {
@@ -43,26 +45,19 @@ const Chatbot = () => {
 
   const difyIcon = <LogoHeader />
 
-  // 用于跟踪是否已经处理过isnew参数
   const isNewProcessedRef = useRef(false)
 
-  // 检查systemVariables并自动创建新对话
   useEffect(() => {
-    if (!isNewProcessedRef.current && Object.keys(systemVariables).length > 0 && appId) {
-      const isNew = systemVariables.isnew === '1'
-      console.log(`IsNew check: isNew=${isNew}, systemVariables=${JSON.stringify(systemVariables)}, appId=${appId}`)
+    if (isNewProcessedRef.current || !appId || systemVariables.isnew !== '1')
+      return
 
-      // 当 isnew=1 时，强制创建新对话（不管是否有现有对话）
-      // 等待appId加载完成后再执行，确保清除正确的localStorage key
-      if (isNew) {
-        console.log('Creating new conversation due to isnew=1')
-        isNewProcessedRef.current = true // 标记已处理
-        setTimeout(() => {
-          handleNewConversation()
-        }, 100)
-      }
-    }
-  }, [handleNewConversation, systemVariables, appId])
+    isNewProcessedRef.current = true
+    const timer = setTimeout(() => {
+      handleNewConversation()
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [appId, handleNewConversation, systemVariables.isnew])
 
   useEffect(() => {
     themeBuilder?.buildTheme(site?.chat_color_theme, site?.chat_color_theme_inverted)
@@ -71,11 +66,11 @@ const Chatbot = () => {
   useDocumentTitle(site?.title || 'Chat')
 
   return (
-    <div className='relative'>
+    <div className="relative">
       <div
         className={cn(
-          'flex flex-col rounded-2xl border border-components-panel-border-subtle',
-          isMobile ? 'h-[calc(100vh_-_60px)] border-[0.5px] border-components-panel-border shadow-xs' : 'h-[100vh] bg-chatbot-bg',
+          'flex flex-col rounded-2xl',
+          isMobile ? 'h-[calc(100vh_-_60px)] shadow-xs' : 'h-[100vh] bg-chatbot-bg',
         )}
         style={isMobile ? Object.assign({}, CssTransform(themeBuilder?.theme?.backgroundHeaderColorStyle ?? '')) : {}}
       >
@@ -87,9 +82,9 @@ const Chatbot = () => {
           theme={themeBuilder?.theme}
           onCreateNewChat={handleNewConversation}
         />
-        <div className={cn('flex grow flex-col overflow-y-auto', isMobile && '!h-[calc(100vh_-_3rem)] rounded-2xl bg-chatbot-bg')}>
+        <div className={cn('flex grow flex-col overflow-y-auto', isMobile && 'm-[0.5px] !h-[calc(100vh_-_3rem)] rounded-2xl bg-chatbot-bg')}>
           {appChatListDataLoading && (
-            <Loading type='app' />
+            <Loading type="app" />
           )}
           {!appChatListDataLoading && (
             <ChatWrapper key={chatShouldReloadKey} />
@@ -97,35 +92,27 @@ const Chatbot = () => {
         </div>
       </div>
       {/* powered by */}
-      {isMobile && (() => {
-        const copyrightParam = systemVariables.copyright
-        if (copyrightParam === '0')
-          return null
-
-        return (
-          <div className='flex h-[60px] shrink-0 items-center pl-2'>
-            {!appData?.custom_config?.remove_webapp_brand && (
-              <div className={cn(
-                'flex shrink-0 items-center gap-1.5 px-2',
-              )}>
-                <div className='system-2xs-medium-uppercase text-text-tertiary'>{t('share.chat.poweredBy')}</div>
-                {(() => {
-                  if (copyrightParam && copyrightParam !== '0')
-                    return <span className='system-2xs-medium text-text-tertiary'>{copyrightParam}</span>
-
-                  if (systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo)
-                    return <img src={systemFeatures.branding.workspace_logo} alt='logo' className='block h-5 w-auto' />
-
-                  if (appData?.custom_config?.replace_webapp_logo)
-                    return <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt='logo' className='block h-5 w-auto' />
-
-                  return <DifyLogo size='small' />
-                })()}
-              </div>
+      {isMobile && (
+        <div className="flex h-[60px] shrink-0 items-center pl-2">
+          {systemVariables.copyright !== '0' && !appData?.custom_config?.remove_webapp_brand && (
+            <div className={cn(
+              'flex shrink-0 items-center gap-1.5 px-2',
             )}
-          </div>
-        )
-      })()}
+            >
+              <div className="system-2xs-medium-uppercase text-text-tertiary">{t('chat.poweredBy', { ns: 'share' })}</div>
+              {
+                systemVariables.copyright
+                  ? <span className="system-2xs-medium text-text-tertiary">{systemVariables.copyright}</span>
+                  : systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo
+                    ? <img src={systemFeatures.branding.workspace_logo} alt="logo" className="block h-5 w-auto" />
+                    : appData?.custom_config?.replace_webapp_logo
+                      ? <img src={`${appData?.custom_config?.replace_webapp_logo}`} alt="logo" className="block h-5 w-auto" />
+                      : <DifyLogo size="small" />
+              }
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -137,7 +124,6 @@ const EmbeddedChatbotWrapper = () => {
 
   const {
     appData,
-    userCanAccess,
     appParams,
     appMeta,
     appChatListDataLoading,
@@ -170,11 +156,11 @@ const EmbeddedChatbotWrapper = () => {
     initUserVariables,
     setAutoSendCallback,
     systemVariables,
-  } = useEmbeddedChatbot()
+  } = useEmbeddedChatbot(AppSourceType.webApp)
 
   const contextValue = useMemo(() => ({
-    userCanAccess,
-    appData,
+    appSourceType: AppSourceType.webApp,
+    appData: (appData as AppData) || null,
     appParams,
     appMeta,
     appChatListDataLoading,
@@ -210,8 +196,6 @@ const EmbeddedChatbotWrapper = () => {
     setAutoSendCallback,
     systemVariables,
   }), [
-    // 只包含原始数据，不包含函数引用以避免循环依赖
-    userCanAccess,
     appData,
     appParams,
     appMeta,
@@ -222,23 +206,37 @@ const EmbeddedChatbotWrapper = () => {
     pinnedConversationList,
     conversationList,
     newConversationInputs,
+    handleNewConversationInputsChange,
     inputsForms,
+    handleNewConversation,
+    handleStartChat,
+    handleChangeConversation,
+    handleNewConversationCompleted,
     chatShouldReloadKey,
     isMobile,
     isInstalledApp,
     allowResetChat,
     appId,
+    handleFeedback,
+    currentChatInstanceRef,
+    themeBuilder,
     clearChatList,
+    setClearChatList,
     isResponding,
+    setIsResponding,
     currentConversationInputs,
+    setCurrentConversationInputs,
     allInputsHidden,
     initUserVariables,
+    setAutoSendCallback,
     systemVariables,
   ])
 
-  return <EmbeddedChatbotContext.Provider value={contextValue}>
-    <Chatbot />
-  </EmbeddedChatbotContext.Provider>
+  return (
+    <EmbeddedChatbotContext.Provider value={contextValue}>
+      <Chatbot />
+    </EmbeddedChatbotContext.Provider>
+  )
 }
 
 const EmbeddedChatbot = () => {

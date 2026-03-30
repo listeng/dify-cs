@@ -1,14 +1,15 @@
 import unittest
 from datetime import UTC, datetime
-from typing import Optional
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+from graphon.file import File, FileTransferMethod, FileType
 from sqlalchemy.orm import Session
 
-from core.file import File, FileTransferMethod, FileType
+from core.app.file_access import DatabaseFileAccessController
 from extensions.ext_database import db
+from extensions.storage.storage_type import StorageType
 from factories.file_factory import StorageKeyLoader
 from models import ToolFile, UploadFile
 from models.enums import CreatorUserRole
@@ -35,14 +36,18 @@ class TestStorageKeyLoader(unittest.TestCase):
         self.test_tool_files = []
 
         # Create StorageKeyLoader instance
-        self.loader = StorageKeyLoader(self.session, self.tenant_id)
+        self.loader = StorageKeyLoader(
+            self.session,
+            self.tenant_id,
+            access_controller=DatabaseFileAccessController(),
+        )
 
     def tearDown(self):
         """Clean up test data after each test method."""
         self.session.rollback()
 
     def _create_upload_file(
-        self, file_id: Optional[str] = None, storage_key: Optional[str] = None, tenant_id: Optional[str] = None
+        self, file_id: str | None = None, storage_key: str | None = None, tenant_id: str | None = None
     ) -> UploadFile:
         """Helper method to create an UploadFile record for testing."""
         if file_id is None:
@@ -54,7 +59,7 @@ class TestStorageKeyLoader(unittest.TestCase):
 
         upload_file = UploadFile(
             tenant_id=tenant_id,
-            storage_type="local",
+            storage_type=StorageType.LOCAL,
             key=storage_key,
             name="test_file.txt",
             size=1024,
@@ -74,7 +79,7 @@ class TestStorageKeyLoader(unittest.TestCase):
         return upload_file
 
     def _create_tool_file(
-        self, file_id: Optional[str] = None, file_key: Optional[str] = None, tenant_id: Optional[str] = None
+        self, file_id: str | None = None, file_key: str | None = None, tenant_id: str | None = None
     ) -> ToolFile:
         """Helper method to create a ToolFile record for testing."""
         if file_id is None:
@@ -84,16 +89,17 @@ class TestStorageKeyLoader(unittest.TestCase):
         if tenant_id is None:
             tenant_id = self.tenant_id
 
-        tool_file = ToolFile()
+        tool_file = ToolFile(
+            user_id=self.user_id,
+            tenant_id=tenant_id,
+            conversation_id=self.conversation_id,
+            file_key=file_key,
+            mimetype="text/plain",
+            original_url="http://example.com/file.txt",
+            name="test_tool_file.txt",
+            size=2048,
+        )
         tool_file.id = file_id
-        tool_file.user_id = self.user_id
-        tool_file.tenant_id = tenant_id
-        tool_file.conversation_id = self.conversation_id
-        tool_file.file_key = file_key
-        tool_file.mimetype = "text/plain"
-        tool_file.original_url = "http://example.com/file.txt"
-        tool_file.name = "test_tool_file.txt"
-        tool_file.size = 2048
 
         self.session.add(tool_file)
         self.session.flush()
@@ -101,9 +107,7 @@ class TestStorageKeyLoader(unittest.TestCase):
 
         return tool_file
 
-    def _create_file(
-        self, related_id: str, transfer_method: FileTransferMethod, tenant_id: Optional[str] = None
-    ) -> File:
+    def _create_file(self, related_id: str, transfer_method: FileTransferMethod, tenant_id: str | None = None) -> File:
         """Helper method to create a File object for testing."""
         if tenant_id is None:
             tenant_id = self.tenant_id
@@ -194,19 +198,16 @@ class TestStorageKeyLoader(unittest.TestCase):
         # Should not raise any exceptions
         self.loader.load_storage_keys([])
 
-    def test_load_storage_keys_tenant_mismatch(self):
-        """Test tenant_id validation."""
-        # Create file with different tenant_id
+    def test_load_storage_keys_ignores_legacy_file_tenant_id(self):
+        """Legacy file tenant_id should not override the loader tenant scope."""
         upload_file = self._create_upload_file()
         file = self._create_file(
             related_id=upload_file.id, transfer_method=FileTransferMethod.LOCAL_FILE, tenant_id=str(uuid4())
         )
 
-        # Should raise ValueError for tenant mismatch
-        with pytest.raises(ValueError) as context:
-            self.loader.load_storage_keys([file])
+        self.loader.load_storage_keys([file])
 
-        assert "invalid file, expected tenant_id" in str(context.value)
+        assert file._storage_key == upload_file.key
 
     def test_load_storage_keys_missing_file_id(self):
         """Test with None file.related_id."""
@@ -291,7 +292,7 @@ class TestStorageKeyLoader(unittest.TestCase):
         # Create upload file for other tenant (but don't add to cleanup list)
         upload_file_other = UploadFile(
             tenant_id=other_tenant_id,
-            storage_type="local",
+            storage_type=StorageType.LOCAL,
             key="other_tenant_key",
             name="other_file.txt",
             size=1024,
@@ -315,7 +316,7 @@ class TestStorageKeyLoader(unittest.TestCase):
         with pytest.raises(ValueError) as context:
             self.loader.load_storage_keys([file_other])
 
-        assert "invalid file, expected tenant_id" in str(context.value)
+        assert "Upload file not found for id:" in str(context.value)
 
         # Current tenant's file should still work
         self.loader.load_storage_keys([file_current])
@@ -339,7 +340,7 @@ class TestStorageKeyLoader(unittest.TestCase):
         with pytest.raises(ValueError) as context:
             self.loader.load_storage_keys([file_current, file_other])
 
-        assert "invalid file, expected tenant_id" in str(context.value)
+        assert "Upload file not found for id:" in str(context.value)
 
     def test_load_storage_keys_duplicate_file_ids(self):
         """Test handling of duplicate file IDs in the batch."""
@@ -366,6 +367,10 @@ class TestStorageKeyLoader(unittest.TestCase):
         # Create loader with different session (same underlying connection)
 
         with Session(bind=db.engine) as other_session:
-            other_loader = StorageKeyLoader(other_session, self.tenant_id)
+            other_loader = StorageKeyLoader(
+                other_session,
+                self.tenant_id,
+                access_controller=DatabaseFileAccessController(),
+            )
             with pytest.raises(ValueError):
                 other_loader.load_storage_keys([file])

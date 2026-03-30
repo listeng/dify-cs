@@ -1,3 +1,18 @@
+/* eslint-disable ts/no-explicit-any */
+import type {
+  ChatConfig,
+  ChatItem,
+  Feedback,
+} from '../types'
+import type { InputValueTypes } from '@/app/components/share/text-generation/types'
+import type { Locale } from '@/i18n-config'
+import type {
+  AppData,
+  ConversationItem,
+} from '@/models/share'
+import { useLocalStorageState } from 'ahooks'
+import { noop } from 'es-toolkit/function'
+import { produce } from 'immer'
 import {
   useCallback,
   useEffect,
@@ -6,38 +21,23 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import useSWR from 'swr'
-import { useLocalStorageState } from 'ahooks'
-import produce from 'immer'
-import type {
-  ChatConfig,
-  ChatItem,
-  Feedback,
-} from '../types'
+import { useToastContext } from '@/app/components/base/toast/context'
+import { addFileInfos, sortAgentSorts } from '@/app/components/tools/utils'
+import { InputVarType } from '@/app/components/workflow/types'
+import { useWebAppStore } from '@/context/web-app-context'
+import { changeLanguage } from '@/i18n-config/client'
+import { AppSourceType, updateFeedback } from '@/service/share'
+import {
+  useInvalidateShareConversations,
+  useShareChatList,
+  useShareConversationName,
+  useShareConversations,
+} from '@/service/use-share'
+import { useGetTryAppInfo, useGetTryAppParams } from '@/service/use-try-app'
+import { TransferMethod } from '@/types/app'
+import { getProcessedFilesFromResponse } from '../../file-uploader/utils'
 import { CONVERSATION_ID_INFO } from '../constants'
 import { buildChatItemTree, getProcessedInputsFromUrlParams, getProcessedSystemVariablesFromUrlParams, getProcessedUserVariablesFromUrlParams } from '../utils'
-import { getProcessedFilesFromResponse } from '../../file-uploader/utils'
-import {
-  fetchAppInfo,
-  fetchAppMeta,
-  fetchAppParams,
-  fetchChatList,
-  fetchConversations,
-  generationConversationName,
-  updateFeedback,
-} from '@/service/share'
-import type {
-  // AppData,
-  ConversationItem,
-} from '@/models/share'
-import { useToastContext } from '@/app/components/base/toast'
-import { changeLanguage } from '@/i18n-config/i18next-config'
-import { InputVarType } from '@/app/components/workflow/types'
-import { TransferMethod } from '@/types/app'
-import { addFileInfos, sortAgentSorts } from '@/app/components/tools/utils'
-import { noop } from 'lodash-es'
-import { useGetUserCanAccessApp } from '@/service/access-control'
-import { useGlobalPublicStore } from '@/context/global-public-context'
 
 function getFormattedChatList(messages: any[]) {
   const newChatList: ChatItem[] = []
@@ -65,39 +65,49 @@ function getFormattedChatList(messages: any[]) {
   return newChatList
 }
 
-export const useEmbeddedChatbot = () => {
-  const isInstalledApp = false
-  const systemFeatures = useGlobalPublicStore(s => s.systemFeatures)
-  const { data: appInfo, isLoading: appInfoLoading, error: appInfoError } = useSWR('appInfo', fetchAppInfo)
-  const { isPending: isCheckingPermission, data: userCanAccessResult } = useGetUserCanAccessApp({
-    appId: appInfo?.app_id,
-    isInstalledApp,
-  })
+export const useEmbeddedChatbot = (appSourceType: AppSourceType, tryAppId?: string) => {
+  const isInstalledApp = false // just can be webapp and try app
+  const isTryApp = appSourceType === AppSourceType.tryApp
+  const { data: tryAppInfo } = useGetTryAppInfo(isTryApp ? tryAppId! : '')
+  const webAppInfo = useWebAppStore(s => s.appInfo)
+  const appInfo = isTryApp ? tryAppInfo : webAppInfo
+  const appMeta = useWebAppStore(s => s.appMeta)
+  const { data: tryAppParams } = useGetTryAppParams(isTryApp ? tryAppId! : '')
+  const webAppParams = useWebAppStore(s => s.appParams)
+  const appParams = isTryApp ? tryAppParams : webAppParams
 
-  const appData = useMemo(() => {
-    return appInfo
-  }, [appInfo])
-  const appId = useMemo(() => appData?.app_id, [appData])
+  const appId = useMemo(() => {
+    return isTryApp ? tryAppId : (appInfo as any)?.app_id
+  }, [appInfo, isTryApp, tryAppId])
+
+  const embeddedConversationId = useWebAppStore(s => s.embeddedConversationId)
+  const embeddedUserId = useWebAppStore(s => s.embeddedUserId)
 
   const [userId, setUserId] = useState<string>()
   const [conversationId, setConversationId] = useState<string>()
   const [systemVariables, setSystemVariables] = useState<Record<string, any>>({})
-  useEffect(() => {
-    // 先检查原始URL参数
-    const urlParams = new URLSearchParams(window.location.search)
-        console.log(`Raw URL params: ${JSON.stringify(Object.fromEntries(urlParams))}`)
 
-    getProcessedSystemVariablesFromUrlParams().then((vars) => {
-      console.log(`SystemVariables parsed from URL: ${JSON.stringify(vars)}`)
-      const { user_id, conversation_id, ...otherVars } = vars
-      console.log(`SystemVariables after extraction: otherVars=${JSON.stringify(otherVars)}, user_id=${user_id}, conversation_id=${conversation_id}`)
+  useEffect(() => {
+    if (isTryApp)
+      return
+    getProcessedSystemVariablesFromUrlParams().then(({ user_id, conversation_id, ...otherVars }) => {
       setUserId(user_id)
       setConversationId(conversation_id)
       setSystemVariables(otherVars)
     })
-  }, [])
+  }, [isTryApp])
 
   useEffect(() => {
+    setUserId(embeddedUserId || undefined)
+  }, [embeddedUserId])
+
+  useEffect(() => {
+    setConversationId(embeddedConversationId || undefined)
+  }, [embeddedConversationId])
+
+  useEffect(() => {
+    if (isTryApp)
+      return
     const setLanguageFromParams = async () => {
       // Check URL parameters for language override
       const urlParams = new URLSearchParams(window.location.search)
@@ -109,15 +119,15 @@ export const useEmbeddedChatbot = () => {
 
       if (localeParam) {
         // If locale parameter exists in URL, use it instead of default
-        changeLanguage(localeParam)
+        await changeLanguage(localeParam as Locale)
       }
       else if (localeFromSysVar) {
         // If locale is set as a system variable, use that
-        changeLanguage(localeFromSysVar)
+        await changeLanguage(localeFromSysVar)
       }
-      else if (appInfo?.site.default_language) {
+      else if ((appInfo as unknown as AppData)?.site?.default_language) {
         // Otherwise use the default from app config
-        changeLanguage(appInfo.site.default_language)
+        await changeLanguage((appInfo as unknown as AppData).site?.default_language)
       }
     }
 
@@ -127,31 +137,27 @@ export const useEmbeddedChatbot = () => {
   const [conversationIdInfo, setConversationIdInfo] = useLocalStorageState<Record<string, Record<string, string>>>(CONVERSATION_ID_INFO, {
     defaultValue: {},
   })
+  const removeConversationIdInfo = useCallback((appId: string) => {
+    setConversationIdInfo((prev) => {
+      const newInfo = { ...prev }
+      delete newInfo[appId]
+      return newInfo
+    })
+  }, [setConversationIdInfo])
   const allowResetChat = !conversationId
-  const currentConversationId = useMemo(() => {
-    const effectiveAppId = appId || 'DEFAULT_APP'
-    const result = conversationIdInfo?.[effectiveAppId]?.[userId || 'DEFAULT'] || conversationId || ''
-    console.log(`currentConversationId calculation: conversationIdInfo=${conversationIdInfo?.[effectiveAppId]?.[userId || 'DEFAULT']}, urlConversationId=${conversationId}, result=${result}, appId=${appId}, userId=${userId}`)
-    return result
-  }, [appId, conversationIdInfo, userId, conversationId])
+  const currentConversationId = useMemo(() => conversationIdInfo?.[appId || '']?.[userId || 'DEFAULT'] || conversationId || '', [appId, conversationIdInfo, userId, conversationId])
   const handleConversationIdInfoChange = useCallback((changeConversationId: string) => {
-    console.log(`handleConversationIdInfoChange called: changeConversationId=${changeConversationId}, appId=${appId}, userId=${userId}`)
     if (appId) {
-      let prevValue = conversationIdInfo?.[appId]
+      let prevValue = conversationIdInfo?.[appId || '']
       if (typeof prevValue === 'string')
         prevValue = {}
-      const newConversationIdInfo = {
+      setConversationIdInfo({
         ...conversationIdInfo,
-        [appId]: {
+        [appId || '']: {
           ...prevValue,
           [userId || 'DEFAULT']: changeConversationId,
         },
-      }
-      console.log(`Setting conversationIdInfo: old=${JSON.stringify(conversationIdInfo)}, new=${JSON.stringify(newConversationIdInfo)}`)
-      setConversationIdInfo(newConversationIdInfo)
-    }
- else {
-      console.log('Skipping conversationIdInfo update: appId is not available')
+      })
     }
   }, [appId, conversationIdInfo, setConversationIdInfo, userId])
 
@@ -163,11 +169,30 @@ export const useEmbeddedChatbot = () => {
     return currentConversationId
   }, [currentConversationId, newConversationId])
 
-  const { data: appParams } = useSWR(['appParams', isInstalledApp, appId], () => fetchAppParams(isInstalledApp, appId))
-  const { data: appMeta } = useSWR(['appMeta', isInstalledApp, appId], () => fetchAppMeta(isInstalledApp, appId))
-  const { data: appPinnedConversationData } = useSWR(['appConversationData', isInstalledApp, appId, true], () => fetchConversations(isInstalledApp, appId, undefined, true, 100))
-  const { data: appConversationData, isLoading: appConversationDataLoading, mutate: mutateAppConversationData } = useSWR(['appConversationData', isInstalledApp, appId, false], () => fetchConversations(isInstalledApp, appId, undefined, false, 100))
-  const { data: appChatListData, isLoading: appChatListDataLoading } = useSWR(chatShouldReloadKey ? ['appChatList', chatShouldReloadKey, isInstalledApp, appId] : null, () => fetchChatList(chatShouldReloadKey, isInstalledApp, appId))
+  const { data: appPinnedConversationData } = useShareConversations({
+    appSourceType,
+    appId,
+    pinned: true,
+    limit: 100,
+  })
+  const {
+    data: appConversationData,
+    isLoading: appConversationDataLoading,
+  } = useShareConversations({
+    appSourceType,
+    appId,
+    pinned: false,
+    limit: 100,
+  })
+  const {
+    data: appChatListData,
+    isLoading: appChatListDataLoading,
+  } = useShareChatList({
+    conversationId: chatShouldReloadKey,
+    appSourceType,
+    appId,
+  })
+  const invalidateShareConversations = useInvalidateShareConversations()
 
   const [clearChatList, setClearChatList] = useState(false)
   const [isResponding, setIsResponding] = useState(false)
@@ -190,14 +215,12 @@ export const useEmbeddedChatbot = () => {
   const [initUserVariables, setInitUserVariables] = useState<Record<string, any>>({})
   const handleNewConversationInputsChange = useCallback((newInputs: Record<string, any>) => {
     newConversationInputsRef.current = newInputs
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
     setNewConversationInputs(newInputs)
   }, [])
-    const inputsForms = useMemo(() => {
-    // 当hideparams=1和isnew=1时，使用newConversationInputs作为default值源，确保表单不会被清空
+  const inputsForms = useMemo(() => {
     const shouldUseNewConversationInputs = systemVariables.hideparams === '1' && systemVariables.isnew === '1'
     const inputsSource = shouldUseNewConversationInputs ? newConversationInputs : initInputs
-
-    console.log(`InputsForms calculation: shouldUseNewConversationInputs=${shouldUseNewConversationInputs}, inputsSource=${JSON.stringify(inputsSource)}, systemVariables=${JSON.stringify(systemVariables)}`)
 
     return (appParams?.user_input_form || []).filter((item: any) => !item.external_data_tool).map((item: any) => {
       if (item.paragraph) {
@@ -207,18 +230,28 @@ export const useEmbeddedChatbot = () => {
 
         return {
           ...item.paragraph,
-          default: value || item.default,
+          default: value || item.default || item.paragraph.default,
           type: 'paragraph',
         }
       }
       if (item.number) {
-        const convertedNumber = Number(inputsSource[item.number.variable]) ?? undefined
+        const convertedNumber = Number(inputsSource[item.number.variable])
         return {
           ...item.number,
-          default: convertedNumber || item.default,
+          default: convertedNumber || item.default || item.number.default,
           type: 'number',
         }
       }
+
+      if (item.checkbox) {
+        const preset = inputsSource[item.checkbox.variable] === true
+        return {
+          ...item.checkbox,
+          default: preset || item.default || item.checkbox.default,
+          type: 'checkbox',
+        }
+      }
+
       if (item.select) {
         const isInputInOptions = item.select.options.includes(inputsSource[item.select.variable])
         return {
@@ -242,17 +275,24 @@ export const useEmbeddedChatbot = () => {
         }
       }
 
+      if (item.json_object) {
+        return {
+          ...item.json_object,
+          type: 'json_object',
+        }
+      }
+
       let value = inputsSource[item['text-input'].variable]
       if (value && item['text-input'].max_length && value.length > item['text-input'].max_length)
         value = value.slice(0, item['text-input'].max_length)
 
       return {
         ...item['text-input'],
-        default: value || item.default,
-        type: 'text-input',
+        default: value || item.default || item['text-input'].default,
+          type: 'text-input',
       }
     })
-  }, [initInputs, appParams, systemVariables.hideparams, systemVariables.isnew, newConversationInputs])
+  }, [appParams, initInputs, newConversationInputs, systemVariables.hideparams, systemVariables.isnew])
 
   const allInputsHidden = useMemo(() => {
     return inputsForms.length > 0 && inputsForms.every(item => item.hide === true)
@@ -261,44 +301,43 @@ export const useEmbeddedChatbot = () => {
   useEffect(() => {
     // init inputs from url params
     (async () => {
+      if (isTryApp)
+        return
       const inputs = await getProcessedInputsFromUrlParams()
       const userVariables = await getProcessedUserVariablesFromUrlParams()
       setInitInputs(inputs)
       setInitUserVariables(userVariables)
     })()
-  }, [])
-  // 直接使用 useMemo 计算 conversationInputs，避免 useEffect 中的状态更新
+  }, [isTryApp])
+
   const defaultConversationInputs = useMemo(() => {
-    const conversationInputs: Record<string, any> = {}
-    inputsForms.forEach((item: any) => {
+    const conversationInputs: Record<string, InputValueTypes> = {}
+
+    inputsForms.forEach((item) => {
       conversationInputs[item.variable] = item.default || null
     })
     return conversationInputs
   }, [inputsForms])
 
-  // 只在 defaultConversationInputs 真正改变时才更新
   useEffect(() => {
-    // 当hideparams=1和isnew=1时，不要重置newConversationInputs，保持URL参数
-    if (systemVariables.hideparams === '1' && systemVariables.isnew === '1') {
-      console.log('Skipping newConversationInputs reset due to hideparams=1 and isnew=1')
+    if (systemVariables.hideparams === '1' && systemVariables.isnew === '1')
       return
-    }
 
-    const currentInputsStr = JSON.stringify(newConversationInputsRef.current)
-    const newInputsStr = JSON.stringify(defaultConversationInputs)
+    handleNewConversationInputsChange(defaultConversationInputs)
+  }, [defaultConversationInputs, handleNewConversationInputsChange, systemVariables.hideparams, systemVariables.isnew])
 
-    if (currentInputsStr !== newInputsStr) {
-      console.log(`Updating newConversationInputs: from ${currentInputsStr} to ${newInputsStr}`)
-      // 直接调用状态更新函数，避免依赖 handleNewConversationInputsChange
-      newConversationInputsRef.current = defaultConversationInputs
-      setNewConversationInputs(defaultConversationInputs)
-    }
-  }, [defaultConversationInputs, systemVariables.hideparams, systemVariables.isnew])
-
-  const { data: newConversation } = useSWR(newConversationId ? [isInstalledApp, appId, newConversationId] : null, () => generationConversationName(isInstalledApp, appId, newConversationId), { revalidateOnFocus: false })
+  const { data: newConversation } = useShareConversationName({
+    conversationId: newConversationId,
+    appSourceType,
+    appId,
+  }, {
+    refetchOnWindowFocus: false,
+    enabled: !isTryApp,
+  })
   const [originConversationList, setOriginConversationList] = useState<ConversationItem[]>([])
   useEffect(() => {
     if (appConversationData?.data && !appConversationDataLoading)
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
       setOriginConversationList(appConversationData?.data)
   }, [appConversationData, appConversationDataLoading])
   const conversationList = useMemo(() => {
@@ -307,7 +346,7 @@ export const useEmbeddedChatbot = () => {
     if (showNewConversationItemInList && data[0]?.id !== '') {
       data.unshift({
         id: '',
-        name: t('share.chat.newChatDefaultName'),
+        name: t('chat.newChatDefaultName', { ns: 'share' }),
         inputs: {},
         introduction: '',
       })
@@ -339,35 +378,40 @@ export const useEmbeddedChatbot = () => {
 
   const currentConversationLatestInputs = useMemo(() => {
     if (!currentConversationId || !appChatListData?.data.length)
-      return {}
+      return newConversationInputsRef.current || {}
     return appChatListData.data.slice().pop().inputs || {}
   }, [appChatListData, currentConversationId])
   const [currentConversationInputs, setCurrentConversationInputs] = useState<Record<string, any>>(currentConversationLatestInputs || {})
   useEffect(() => {
-    // 当 hideparams=1 且 isnew=1 时，优先保留现有的 inputs，只有当后端返回的 latestInputs 非空时才合并更新
+    if (isTryApp)
+      return
+
     if (systemVariables.hideparams === '1' && systemVariables.isnew === '1') {
-      if (currentConversationLatestInputs && Object.keys(currentConversationLatestInputs).length > 0)
-        setCurrentConversationInputs(prev => ({ ...prev, ...currentConversationLatestInputs }))
+      if (currentConversationLatestInputs && Object.keys(currentConversationLatestInputs).length > 0) {
+        setCurrentConversationInputs(prev => ({
+          ...prev,
+          ...currentConversationLatestInputs,
+        }))
+      }
       return
     }
+
     if (currentConversationItem)
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
       setCurrentConversationInputs(currentConversationLatestInputs || {})
-  }, [currentConversationItem, currentConversationId, currentConversationLatestInputs, systemVariables.hideparams, systemVariables.isnew]) // 使用currentConversationId而不是currentConversationLatestInputs避免循环
+  }, [currentConversationItem, currentConversationLatestInputs, isTryApp, systemVariables.hideparams, systemVariables.isnew])
 
   const { notify } = useToastContext()
   const checkInputsRequired = useCallback((silent?: boolean) => {
-    // 当hideparams=1时，跳过输入验证，直接返回true
-    if (systemVariables.hideparams === '1') {
-      console.log('Skipping input validation due to hideparams=1')
+    if (systemVariables.hideparams === '1')
       return true
-    }
 
     if (allInputsHidden)
       return true
 
     let hasEmptyInput = ''
     let fileIsUploading = false
-    const requiredVars = inputsForms.filter(({ required }) => required)
+    const requiredVars = inputsForms.filter(({ required, type }) => required && type !== InputVarType.checkbox)
     if (requiredVars.length) {
       requiredVars.forEach(({ variable, label, type }) => {
         if (hasEmptyInput)
@@ -390,23 +434,35 @@ export const useEmbeddedChatbot = () => {
     }
 
     if (hasEmptyInput) {
-      notify({ type: 'error', message: t('appDebug.errorMessage.valueOfVarRequired', { key: hasEmptyInput }) })
+      notify({ type: 'error', message: t('errorMessage.valueOfVarRequired', { ns: 'appDebug', key: hasEmptyInput }) })
       return false
     }
 
     if (fileIsUploading) {
-      notify({ type: 'info', message: t('appDebug.errorMessage.waitForFileUpload') })
+      notify({ type: 'info', message: t('errorMessage.waitForFileUpload', { ns: 'appDebug' }) })
       return
     }
 
     return true
   }, [inputsForms, notify, t, allInputsHidden, systemVariables.hideparams])
-  const handleStartChat = useCallback((callback?: any) => {
+  const handleStartChat = useCallback((callback?: () => void) => {
     if (checkInputsRequired()) {
       setShowNewConversationItemInList(true)
       callback?.()
     }
   }, [setShowNewConversationItemInList, checkInputsRequired])
+
+  useEffect(() => {
+    if (systemVariables.hideparams !== '1' || !inputsForms.length || currentConversationId)
+      return
+
+    const timer = setTimeout(() => {
+      handleStartChat()
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [currentConversationId, handleStartChat, inputsForms.length, systemVariables.hideparams])
+
   const currentChatInstanceRef = useRef<{ handleStop: () => void }>({ handleStop: noop })
   const handleChangeConversation = useCallback((conversationId: string) => {
     currentChatInstanceRef.current.handleStop()
@@ -416,146 +472,92 @@ export const useEmbeddedChatbot = () => {
       setClearChatList(false)
   }, [handleConversationIdInfoChange, setClearChatList])
   const handleNewConversation = useCallback(async () => {
-    console.log('handleNewConversation called')
+    if (isTryApp) {
+      setClearChatList(true)
+      return
+    }
+
     currentChatInstanceRef.current.handleStop()
     setShowNewConversationItemInList(true)
-    console.log('Calling handleChangeConversation with empty string')
     handleChangeConversation('')
-    // 异步获取输入参数，使用getProcessedInputsFromUrlParams以支持压缩参数
-    const inputs = await getProcessedInputsFromUrlParams()
-    // 直接更新状态，避免循环依赖
-    newConversationInputsRef.current = inputs
-    setNewConversationInputs(inputs)
+    handleNewConversationInputsChange(await getProcessedInputsFromUrlParams())
     setClearChatList(true)
-    console.log('handleNewConversation completed')
-  }, [handleChangeConversation, setShowNewConversationItemInList, setClearChatList])
+  }, [isTryApp, setShowNewConversationItemInList, handleNewConversationInputsChange, setClearChatList])
 
   const handleNewConversationCompleted = useCallback((newConversationId: string) => {
-    console.log(`handleNewConversationCompleted called: newConversationId=${newConversationId}`)
-    console.log(`Setting currentConversationInputs to: ${JSON.stringify(newConversationInputsRef.current)}`)
     setNewConversationId(newConversationId)
     handleConversationIdInfoChange(newConversationId)
     setShowNewConversationItemInList(false)
-    // 将newConversationInputs的值设置到currentConversationInputs中，确保后续消息发送时使用正确的inputs
     setCurrentConversationInputs(newConversationInputsRef.current || {})
-    mutateAppConversationData()
-  }, [mutateAppConversationData, handleConversationIdInfoChange, newConversationInputsRef, setCurrentConversationInputs])
+    invalidateShareConversations()
+  }, [handleConversationIdInfoChange, invalidateShareConversations])
 
   const handleFeedback = useCallback(async (messageId: string, feedback: Feedback) => {
-    await updateFeedback({ url: `/messages/${messageId}/feedbacks`, body: { rating: feedback.rating } }, isInstalledApp, appId)
-    notify({ type: 'success', message: t('common.api.success') })
-  }, [isInstalledApp, appId, t, notify])
+    await updateFeedback({ url: `/messages/${messageId}/feedbacks`, body: { rating: feedback.rating, content: feedback.content } }, appSourceType, appId)
+    notify({ type: 'success', message: t('api.success', { ns: 'common' }) })
+  }, [appSourceType, appId, t, notify])
 
-          // 自动开始对话：当hideparams=1时，在输入参数设置完成后自动开始对话
-  useEffect(() => {
-    const hideParams = systemVariables.hideparams === '1'
-    console.log(`HideParams auto-start check: hideParams=${hideParams}, systemVariables=${JSON.stringify(systemVariables)}, inputsFormsLength=${inputsForms.length}, currentConversationId=${currentConversationId}`)
-
-    if (hideParams && inputsForms.length > 0 && !currentConversationId) {
-      console.log('Starting auto chat due to hideparams=1')
-      // 延迟执行以确保所有参数都已设置完成
-      const timer = setTimeout(() => {
-        handleStartChat(() => {
-          // 对话开始后的回调，这里可以添加额外的逻辑
-        })
-      }, 500)
-
-      return () => clearTimeout(timer)
-    }
-  }, [inputsForms.length, currentConversationId, handleStartChat, systemVariables.hideparams])
-
-  // PostMessage auto-send functionality
   const autoSendCallbackRef = useRef<((message: string, files?: any[]) => void) | null>(null)
-  // Queue messages if callback not ready yet
   const pendingMessagesRef = useRef<Array<{ message: string, files?: any[] }>>([])
   const setAutoSendCallback = useCallback((callback: ((message: string, files?: any[]) => void) | null) => {
     autoSendCallbackRef.current = callback
-    // flush queued messages once callback becomes available
-    if (callback && pendingMessagesRef.current.length > 0) {
-      const queued = pendingMessagesRef.current.slice()
-      pendingMessagesRef.current = []
-      for (const item of queued) {
-        try {
-          callback(item.message, item.files)
-        }
- catch (err) {
-          // swallow to avoid breaking subsequent flushes
-          console.error('Auto-send queued message failed:', err)
-        }
-      }
-    }
+    if (!callback || !pendingMessagesRef.current.length)
+      return
+
+    const queuedMessages = pendingMessagesRef.current.slice()
+    pendingMessagesRef.current = []
+    queuedMessages.forEach(({ message, files }) => {
+      callback(message, files)
+    })
   }, [])
 
-  // 使用useRef存储最新的检查函数，避免useEffect依赖频繁变化的值
   const checkInputsRef = useRef<() => boolean>(() => true)
   checkInputsRef.current = () => {
-    // 已有会话时，允许直接发送
-    if (currentConversationId) return true
-    // hideparams=1 时跳过校验
-    if (systemVariables.hideparams === '1') return true
-    if (allInputsHidden) return true
+    if (currentConversationId || systemVariables.hideparams === '1' || allInputsHidden)
+      return true
 
     const requiredVars = inputsForms.filter(({ required }) => required)
-    if (requiredVars.length) {
-      return requiredVars.every(({ variable }) => {
-        return newConversationInputsRef.current[variable]
-      })
-    }
-    return true
+    if (!requiredVars.length)
+      return true
+
+    return requiredVars.every(({ variable }) => !!newConversationInputsRef.current[variable])
   }
 
   useEffect(() => {
     const handlePostMessage = (event: MessageEvent) => {
-      // 验证消息来源的安全性（可选）
-      // if (event.origin !== 'https://trusted-parent-domain.com') return
+      if (!event.data || event.data.type !== 'DIFY_CHAT_SEND_MESSAGE')
+        return
 
-      if (event.data && event.data.type === 'DIFY_CHAT_SEND_MESSAGE') {
-        const { message, files = [] } = event.data
-        console.log('[EmbeddedChatbot] received DIFY_CHAT_SEND_MESSAGE', {
-          origin: event.origin,
-          hasCallback: !!autoSendCallbackRef.current,
-          currentConversationId,
-          hideparams: systemVariables.hideparams,
-        })
-        const callback = autoSendCallbackRef.current
-        if (message && typeof message === 'string' && callback) {
-          // 使用ref中的最新检查函数
-          const canSend = checkInputsRef.current?.() ?? true
+      const { message, files = [] } = event.data
+      if (!message || typeof message !== 'string')
+        return
 
-          if (canSend) {
-            console.log('[EmbeddedChatbot] auto-sending message via callback')
-            callback(message, files)
-          }
-          else {
-            console.warn('[EmbeddedChatbot] blocked by inputs requirement; message not sent')
-          }
-        }
-        else if (message && typeof message === 'string' && !callback) {
-          // Callback 尚未就绪时，排队等待 ChatWrapper 注册完成
-          pendingMessagesRef.current.push({ message, files })
-          console.log('[EmbeddedChatbot] queued message because callback not ready', { queueLength: pendingMessagesRef.current.length })
-          // 尝试触发一次新会话初始化（在隐藏参数时无校验）
-          if (systemVariables.hideparams === '1')
-            handleStartChat()
-        }
+      const callback = autoSendCallbackRef.current
+      if (callback) {
+        if (checkInputsRef.current())
+          callback(message, files)
+        return
       }
+
+      pendingMessagesRef.current.push({ message, files })
+      if (systemVariables.hideparams === '1')
+        handleStartChat()
     }
 
     window.addEventListener('message', handlePostMessage)
     return () => window.removeEventListener('message', handlePostMessage)
-  }, [])
+  }, [handleStartChat, systemVariables.hideparams])
 
   return {
-    appInfoError,
-    appInfoLoading: appInfoLoading || (systemFeatures.webapp_auth.enabled && isCheckingPermission),
-    userCanAccess: systemFeatures.webapp_auth.enabled ? userCanAccessResult?.result : true,
+    appSourceType,
     isInstalledApp,
     allowResetChat,
     appId,
     currentConversationId,
     currentConversationItem,
+    removeConversationIdInfo,
     handleConversationIdInfoChange,
-    appData,
+    appData: appInfo,
     appParams: appParams || {} as ChatConfig,
     appMeta,
     appPinnedConversationData,

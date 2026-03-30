@@ -1,8 +1,9 @@
 from collections.abc import Mapping, Sequence
 
+from graphon.file import FILE_MODEL_IDENTITY, File, FileTransferMethod, FileType
+from graphon.variables.segments import ArrayFileSegment, FileSegment
+
 from core.app.apps.common.workflow_response_converter import WorkflowResponseConverter
-from core.file import FILE_MODEL_IDENTITY, File, FileTransferMethod, FileType
-from core.variables.segments import ArrayFileSegment, FileSegment
 
 
 class TestWorkflowResponseConverterFetchFilesFromVariableValue:
@@ -12,7 +13,6 @@ class TestWorkflowResponseConverterFetchFilesFromVariableValue:
         """Create a test File object"""
         return File(
             id=file_id,
-            tenant_id="test_tenant",
             type=FileType.DOCUMENT,
             transfer_method=FileTransferMethod.LOCAL_FILE,
             related_id="related_123",
@@ -23,7 +23,7 @@ class TestWorkflowResponseConverterFetchFilesFromVariableValue:
             storage_key="storage_key_123",
         )
 
-    def create_file_dict(self, file_id: str = "test_file_dict") -> dict:
+    def create_file_dict(self, file_id: str = "test_file_dict"):
         """Create a file dictionary with correct dify_model_identity"""
         return {
             "dify_model_identity": FILE_MODEL_IDENTITY,
@@ -43,7 +43,7 @@ class TestWorkflowResponseConverterFetchFilesFromVariableValue:
         """Test with None input"""
         # The method signature expects Union[dict, list, Segment], but implementation handles None
         # We'll test the actual behavior by passing an empty dict instead
-        result = WorkflowResponseConverter._fetch_files_from_variable_value(None)  # type: ignore
+        result = WorkflowResponseConverter._fetch_files_from_variable_value(None)
         assert result == []
 
     def test_fetch_files_from_variable_value_with_empty_dict(self):
@@ -223,7 +223,7 @@ class TestWorkflowResponseConverterFetchFilesFromVariableValue:
         assert len(result) == 1
         file_dict = result[0]
         assert file_dict["id"] == "property_test"
-        assert file_dict["tenant_id"] == "test_tenant"
+        assert "tenant_id" not in file_dict
         assert file_dict["type"] == "document"
         assert file_dict["transfer_method"] == "local_file"
         assert file_dict["filename"] == "property_test.txt"
