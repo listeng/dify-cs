@@ -1,10 +1,13 @@
-import React, { memo, useCallback, useEffect } from 'react'
+import * as React from 'react'
+import { memo, useCallback, useEffect } from 'react'
 import Button from '@/app/components/base/button'
 import { Target04 } from '@/app/components/base/icons/src/vender/solid/general'
 
+type ActionPayload = Record<string, unknown>
+
 type ActionData = {
   action: string
-  data?: any
+  data?: ActionPayload
   label?: string
   autorun?: boolean
   debug?: boolean
@@ -15,8 +18,6 @@ type ActionData = {
 
 const ActionBlock = ({ content }: { content: string }) => {
   const handleActionClick = useCallback((actionData: ActionData) => {
-    console.log('Action clicked:', actionData)
-
     // 1. 首先推送数据给父页面（如果在iframe中）
     try {
       // 检查是否在iframe中
@@ -28,8 +29,6 @@ const ActionBlock = ({ content }: { content: string }) => {
           timestamp: Date.now(),
           source: 'dify-chat',
         }, '*')
-
-        console.log('Action data sent to parent window:', actionData)
       }
 
       // 也发送给顶级窗口（防止多层iframe嵌套）
@@ -42,7 +41,7 @@ const ActionBlock = ({ content }: { content: string }) => {
         }, '*')
       }
     }
- catch (error) {
+    catch (error) {
       console.warn('Failed to send message to parent window:', error)
     }
 
@@ -56,31 +55,20 @@ const ActionBlock = ({ content }: { content: string }) => {
     // 3. 执行内置操作（可选，根据需要保留或移除）
     switch (actionData.action) {
       case 'navigate':
-        if (actionData.data?.url) {
+        if (typeof actionData.data?.url === 'string') {
           // 在iframe中可能需要让父页面处理导航
-          if (window.parent && window.parent !== window) {
-            // 已通过postMessage发送，让父页面决定如何处理
-            console.log('Navigation request sent to parent')
-          }
- else {
+          if (window.parent === window)
             window.open(actionData.data.url, '_blank')
-          }
         }
         break
       case 'execute':
-        // 执行特定操作 - 通常应该由父页面处理
-        console.log('Execute action - should be handled by parent:', actionData.data)
         break
       case 'copy':
-        if (actionData.data?.text) {
+        if (typeof actionData.data?.text === 'string') {
           navigator.clipboard.writeText(actionData.data.text)
-            .then(() => console.log('Text copied to clipboard'))
             .catch(err => console.warn('Failed to copy text:', err))
         }
         break
-      default:
-        // 其他自定义操作已通过postMessage和事件发送
-        console.log('Custom action sent to parent:', actionData.action)
     }
   }, [])
 
@@ -95,7 +83,7 @@ const ActionBlock = ({ content }: { content: string }) => {
 
       return null
     }
- catch (error) {
+    catch (error) {
       console.error('Failed to parse action content:', error)
       return null
     }
@@ -105,10 +93,8 @@ const ActionBlock = ({ content }: { content: string }) => {
 
   // 如果 autorun 为 true，组件渲染后自动执行 action
   useEffect(() => {
-    if (actionData && actionData.autorun) {
-      console.log('Auto-running action:', actionData)
+    if (actionData && actionData.autorun)
       handleActionClick(actionData)
-    }
   }, [actionData, handleActionClick])
 
   if (!actionData) {
@@ -143,7 +129,7 @@ const ActionBlock = ({ content }: { content: string }) => {
         <div className="flex items-center gap-2">
           <Button
             variant={getButtonVariant()}
-            size="md"
+            size="medium"
             onClick={() => handleActionClick(actionData)}
             className="flex items-center gap-2 rounded px-2 py-1"
           >

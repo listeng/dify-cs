@@ -169,6 +169,8 @@ const createContextValue = (overrides: Partial<EmbeddedChatbotContextValue> = {}
   setCurrentConversationInputs: vi.fn(),
   allInputsHidden: false,
   initUserVariables: {},
+  setAutoSendCallback: vi.fn(),
+  systemVariables: {},
   ...overrides,
 })
 

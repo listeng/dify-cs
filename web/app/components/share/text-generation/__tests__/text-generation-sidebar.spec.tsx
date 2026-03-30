@@ -73,6 +73,7 @@ const visionConfig: VisionSettings = {
 const baseProps: ComponentProps<typeof TextGenerationSidebar> = {
   accessMode: AccessMode.PUBLIC,
   allTasksRun: true,
+  canBatch: true,
   currentTab: 'create',
   customConfig: {
     remove_webapp_brand: false,

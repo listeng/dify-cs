@@ -114,6 +114,8 @@ const createHookReturn = (overrides: Partial<EmbeddedChatbotHookReturn> = {}): E
     setCurrentConversationInputs: vi.fn(),
     allInputsHidden: false,
     initUserVariables: {},
+    setAutoSendCallback: vi.fn(),
+    systemVariables: {},
   }
 
   return {
