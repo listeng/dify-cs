@@ -8,6 +8,7 @@ const withMDX = createMDX()
 
 const nextConfig: NextConfig = {
   basePath: env.NEXT_PUBLIC_BASE_PATH,
+  assetPrefix: env.NEXT_PUBLIC_BASE_PATH || undefined,
   transpilePackages: ['@t3-oss/env-core', '@t3-oss/env-nextjs', 'echarts', 'zrender'],
   turbopack: {
     root: process.cwd(),
